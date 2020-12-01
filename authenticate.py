@@ -1,4 +1,3 @@
-from os import access
 import socket
 from typing import Any, Dict, List, Tuple
 import json
@@ -6,7 +5,8 @@ import os
 import base64
 
 from OpenSSL import crypto
-
+from dotenv import load_dotenv
+load_dotenv()
 
 DCL_SOCKET: int = 7000
 
@@ -76,12 +76,11 @@ def verify(email: str, name: str) -> bool:
         try:
             variant, data = parse_message(data)
 
-            if variant == "Alive":
-                stream.send(b"Alive\0")
-            elif variant == "Challenge":
+            if variant == "Challenge":
                 authenticate_challenge(data, email, name)
             elif variant == "AccessToken":
                 display_access(data)
+                break
             else:
                 print("Unknown message Variant")
 
