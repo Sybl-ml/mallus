@@ -5,6 +5,7 @@ import struct
 from enum import Enum, auto
 from typing import Callable, Optional, Dict, Tuple, List, Union
 import logging
+import io
 
 from xdg import xdg_data_home
 import pandas as pd
@@ -65,7 +66,7 @@ class Sybl:
             logger.error("Model has not been loaded")
             return
 
-        if self._is_authenticated():
+        if not self._is_authenticated():
             return
 
         # Check the message for authentication successfull
@@ -114,9 +115,12 @@ class Sybl:
             train = data["Dataset"]["train"]
             predict = data["Dataset"]["predict"]
 
-            predictions = self.callback()
-            # do your machine learning
-            self._send_message("Fuck your machine learning")
+            train_pd = pd.read_csv(io.StringIO(train))
+            predict_pd = pd.read_csv(io.StringIO(predict))
+
+            predictions = self.callback(train_pd, predict_pd)
+            message = {"Predictions": predictions.to_string()}
+            self._send_message(message)
             self._state = State.HEARTBEAT
 
     
@@ -141,7 +145,7 @@ class Sybl:
             if self._message_stack:
                 job_config = self._message_stack.pop()
             
-            self._send_message("YES")
+            self._send_message({"response": "sure"})
             
             self._state = State.PROCESSING
             logger.info("ACCEPTING JOB")
@@ -174,7 +178,19 @@ class Sybl:
         # print("size_bytes: {}".format(size_bytes))
 
         size = struct.unpack(">I", size_bytes)[0]
-        # print("size: {}".format(size))
+        logger.debug("Message size: {}".format(size))
+
+        if size > 4096:
+            remaining_size = size
+            buffer = []
+
+            while remaining_size > 0:
+                chunk = self._sock.recv(4096)
+                buffer.extend(chunk)
+
+                remaining_size -= 4096
+            
+            return json.loads(buffer)
 
         return json.loads(self._sock.recv(size))
 
