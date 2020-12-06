@@ -167,7 +167,7 @@ class Sybl:
             predict_pd = pd.read_csv(io.StringIO(predict))
 
             predictions = self.callback(train_pd, predict_pd)
-            message = {"Predictions": predictions.to_string()}
+            message = {"Predictions": predictions.to_csv(index=False)}
             self._send_message(message)
             self._state = State.HEARTBEAT
 
