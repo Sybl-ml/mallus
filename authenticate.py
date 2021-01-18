@@ -5,6 +5,7 @@ import json
 import os
 import base64
 import struct
+from pathlib import Path
 
 from OpenSSL import crypto
 from dotenv import load_dotenv
@@ -111,8 +112,18 @@ class Authentication:
     
 
     def save_access_tokens(self):
+        directory = xdg_data_home()
+        path = directory / "sybl.json"
 
-        path = xdg_data_home() / 'sybl.json'
+        # Ensure the path exists
+        if not Path(directory).is_dir():
+            print(f"Creating the following as it does not exist: {directory}")
+            Path(directory).mkdir(parents=True)
+
+        # Ensure the file itself exists, even if it's empty
+        if not Path(path).is_file():
+            print(f"Creating the following file: '{path}'")
+            Path(path).touch()
 
         key_name = f"{self.email}.{self.model_name}"
         new_model = {"model_id": self.model_id, "access_token": self.access_token}
