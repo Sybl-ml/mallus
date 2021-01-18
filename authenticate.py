@@ -92,7 +92,7 @@ class Authentication:
 
         while True:
             # Read some data
-            data = self._read_message() 
+            data = self._read_message()
             print("data: {}".format(data))
 
             try:
@@ -109,7 +109,6 @@ class Authentication:
 
             except IndexError:
                 print("Message cannot be parsed")
-    
 
     def save_access_tokens(self):
         directory = xdg_data_home()
@@ -127,15 +126,15 @@ class Authentication:
 
         key_name = f"{self.email}.{self.model_name}"
         new_model = {"model_id": self.model_id, "access_token": self.access_token}
-        
-        with path.open('r') as f:
+
+        with path.open("r") as f:
 
             contents = f.read()
             json_contents = json.loads(contents if contents else "{}")
 
             json_contents[key_name] = new_model
-        
-        with path.open('w') as f:
+
+        with path.open("w") as f:
 
             f.write(json.dumps(json_contents))
 
@@ -167,7 +166,8 @@ class Authentication:
         # print("length: {}".format(length))
 
         self.stream.send(length + data)
-                
+
+
 def main():
 
     email: str = input("Enter email: ")
