@@ -41,3 +41,22 @@ jobs:
               run: pip install -r requirements.txt
             - name: Run pylint
               run: pylint *.py **/*.py --fail-under 8
+    format:
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest, windows-latest]
+                python-version: ['3.6', '3.7', '3.8', '3.9']
+        name: Pylint ${{ matrix.python-version }}
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v2
+            - name: Setup Python version
+              uses: actions/setup-python@v2
+              with:
+                  python-version: ${{ matrix.python-version }}
+            - name: Update pip
+              run: python -m pip install --upgrade pip setuptools wheel
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+            - name: Run black
+              run: black *.py **/*.py --check
