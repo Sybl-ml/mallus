@@ -16,7 +16,7 @@ DCL_SOCKET: int = 7000
 DCL_IP: str = "127.0.0.1"
 
 
-class Authenication:
+class Authentication:
     def __init__(self, email, model_name):
         self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.stream.connect(("127.0.0.1", DCL_SOCKET))
@@ -163,7 +163,7 @@ def main():
     name: str = input("Enter name of model: ")
     print("Authenticating...")
 
-    verifier = Authenication(email, name)
+    verifier = Authentication(email, name)
 
     verifier.verify()
 
