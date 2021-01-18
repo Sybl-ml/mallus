@@ -35,11 +35,9 @@ jobs:
               uses: actions/setup-python@v2
               with:
                   python-version: ${{ matrix.python-version }}
-            - name: Update Pip
+            - name: Update pip
               run: python -m pip install --upgrade pip setuptools wheel
             - name: Install dependencies
               run: pip install -r requirements.txt
-            - id: changed_files
-              uses: jitterbit/get-changed-files@v1
-            - run:
-                for f in ${{ steps.changed_files.outputs.all }}; do pylint --fail-under 8 ${f}; done
+            - name: Run pylint
+              run: pylint *.py **/*.py --fail-under 8
