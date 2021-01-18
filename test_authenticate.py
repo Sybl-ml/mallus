@@ -1,3 +1,7 @@
+import os
+import shutil
+import tempfile
+
 import pytest
 
 from authenticate import Authentication
@@ -23,3 +27,36 @@ def test_empty_messages_fail_to_parse():
 
     with pytest.raises(IndexError):
         variant, data = instance.parse_message(message)
+
+def test_authentication_creates_sybl_json():
+    # Set the environment variable to a temporary directory
+    with tempfile.TemporaryDirectory() as directory:
+        os.environ["XDG_DATA_HOME"] = directory
+
+        instance = Authentication("email", "model_name")
+        instance.access_token = ""
+        instance.model_id = 2344423
+
+        instance.save_access_tokens()
+
+        expected_path = os.path.join(directory, "sybl.json")
+        assert os.path.isfile(expected_path)
+
+def test_authentication_creates_sybl_json():
+    # Set the environment variable to a temporary directory and delete it
+    with tempfile.TemporaryDirectory() as directory:
+        os.environ["XDG_DATA_HOME"] = directory
+        shutil.rmtree(directory)
+
+        instance = Authentication("email", "model_name")
+        instance.access_token = ""
+        instance.model_id = 2344423
+
+        instance.save_access_tokens()
+
+        # Check that the directory exists
+        assert os.path.isdir(directory)
+
+        # Check that the file got created
+        expected_path = os.path.join(directory, "sybl.json")
+        assert os.path.isfile(expected_path)
