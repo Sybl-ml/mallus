@@ -36,7 +36,7 @@ jobs:
             - name: Install dependencies
               run: pip install -r requirements.txt
             - name: Run pylint
-              run: pylint *.py **/*.py --fail-under 8
+              run: find . -name "*.py" | xargs pylint --fail-under 8
     format:
         name: Black
         runs-on: ubuntu-latest
@@ -51,4 +51,4 @@ jobs:
             - name: Install dependencies
               run: pip install -r requirements.txt
             - name: Run black
-              run: black *.py **/*.py --check
+              run: find . -name "*.py" | xargs black --check
