@@ -92,10 +92,12 @@ class Sybl:
 
         if not self._access_token or not self._model_id:
             logger.error("Model has not been loaded")
-            raise AttributeError("Model access token and ID have not been loaded")
+            raise AttributeError(
+                "Model access token and ID have not been loaded")
 
         if not self._is_authenticated():
-            raise PermissionError("Model access token has not been authenticated")
+            raise PermissionError(
+                "Model access token has not been authenticated")
 
         # Check the message for authentication successfull
         self._state = State.HEARTBEAT
@@ -149,7 +151,8 @@ class Sybl:
                 None
         """
 
-        self._access_token, self._model_id = self._load_access_token(email, model_name)
+        self._access_token, self._model_id = self._load_access_token(
+            email, model_name)
 
         self.email = email
         self.model_name = model_name
@@ -180,7 +183,8 @@ class Sybl:
                 predict_pd = predict_pd.drop(["record_id"], axis=1)
                 print("Predict Data: {}".format(predict_pd))
             else:
-                raise AttributeError("Datasets must have record ids for each row")
+                raise AttributeError(
+                    "Datasets must have record ids for each row")
 
             predictions = self.callback(train_pd, predict_pd)
 
@@ -190,8 +194,6 @@ class Sybl:
                 cols = predictions.columns.tolist()
                 cols = cols[-1:] + cols[:-1]
                 predictions = predictions[cols]
-            else:
-                raise AttributeError("Datasets must have record ids for each row")
 
             message = {"Predictions": predictions.to_csv(index=False)}
             self._send_message(message)
