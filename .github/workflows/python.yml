@@ -1,0 +1,50 @@
+name: Continuous integration
+
+on: [push, pull_request]
+
+jobs:
+    test:
+        name: Pytest
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - name: Setup Python version
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.9
+            - name: Update pip
+              run: python -m pip install --upgrade pip setuptools wheel
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+            - name: Run pytest
+              run: pytest --verbose
+    lint:
+        name: Pylint
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - name: Setup Python version
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.9
+            - name: Update pip
+              run: python -m pip install --upgrade pip setuptools wheel
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+            - name: Run pylint
+              run: find . -name "*.py" | xargs pylint --fail-under 8
+    format:
+        name: Black
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - name: Setup Python version
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.9
+            - name: Update pip
+              run: python -m pip install --upgrade pip setuptools wheel
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+            - name: Run black
+              run: find . -name "*.py" | xargs black --check
