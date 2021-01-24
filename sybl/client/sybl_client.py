@@ -92,12 +92,10 @@ class Sybl:
 
         if not self._access_token or not self._model_id:
             logger.error("Model has not been loaded")
-            raise AttributeError(
-                "Model access token and ID have not been loaded")
+            raise AttributeError("Model access token and ID have not been loaded")
 
         if not self._is_authenticated():
-            raise PermissionError(
-                "Model access token has not been authenticated")
+            raise PermissionError("Model access token has not been authenticated")
 
         # Check the message for authentication successfull
         self._state = State.HEARTBEAT
@@ -151,8 +149,7 @@ class Sybl:
                 None
         """
 
-        self._access_token, self._model_id = self._load_access_token(
-            email, model_name)
+        self._access_token, self._model_id = self._load_access_token(email, model_name)
 
         self.email = email
         self.model_name = model_name
