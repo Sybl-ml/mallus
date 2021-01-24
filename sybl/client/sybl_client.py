@@ -179,6 +179,8 @@ class Sybl:
 
                 predict_pd = predict_pd.drop(["record_id"], axis=1)
                 print("Predict Data: {}".format(predict_pd))
+            else:
+                raise AttributeError("Datasets must have record ids for each row")
 
             predictions = self.callback(train_pd, predict_pd)
 
@@ -188,6 +190,8 @@ class Sybl:
                 cols = predictions.columns.tolist()
                 cols = cols[-1:] + cols[:-1]
                 predictions = predictions[cols]
+            else:
+                raise AttributeError("Datasets must have record ids for each row")
 
             message = {"Predictions": predictions.to_csv(index=False)}
             self._send_message(message)
