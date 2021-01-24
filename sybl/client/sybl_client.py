@@ -92,10 +92,12 @@ class Sybl:
 
         if not self._access_token or not self._model_id:
             logger.error("Model has not been loaded")
-            raise AttributeError("Model access token and ID have not been loaded")
+            raise AttributeError(
+                "Model access token and ID have not been loaded")
 
         if not self._is_authenticated():
-            raise PermissionError("Model access token has not been authenticated")
+            raise PermissionError(
+                "Model access token has not been authenticated")
 
         # Check the message for authentication successfull
         self._state = State.HEARTBEAT
@@ -149,7 +151,8 @@ class Sybl:
                 None
         """
 
-        self._access_token, self._model_id = self._load_access_token(email, model_name)
+        self._access_token, self._model_id = self._load_access_token(
+            email, model_name)
 
         self.email = email
         self.model_name = model_name
@@ -166,7 +169,29 @@ class Sybl:
             train_pd = pd.read_csv(io.StringIO(train))
             predict_pd = pd.read_csv(io.StringIO(predict))
 
+            predict_rids = None
+
+            if "record_id" in train_pd.columns:
+                # Take record ids from training set
+                train_pd = train_pd.drop(["record_id"], axis=1)
+                print("Training Data: {}".format(train_pd))
+
+                # Take record ids from predict set and store for later
+                predict_rids = predict_pd[["record_id"]]
+                print("Predict Record IDs: {}".format(predict_rids))
+
+                predict_pd = predict_pd.drop(["record_id"], axis=1)
+                print("Predict Data: {}".format(predict_pd))
+
             predictions = self.callback(train_pd, predict_pd)
+
+            # Attatch record ids onto predictions
+            if predict_rids is not None:
+                predictions["record_id"] = predict_rids
+                cols = predictions.columns.tolist()
+                cols = cols[-1:] + cols[:-1]
+                predictions = predictions[cols]
+
             message = {"Predictions": predictions.to_csv(index=False)}
             self._send_message(message)
             self._state = State.HEARTBEAT
