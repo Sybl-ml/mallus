@@ -1,19 +1,26 @@
+"""
+Tests the Authenticate module, such as the `parse_message` function and
+ensuring proper handling of `sybl.json`.
+"""
+
+# Tests probably don't need a docstring
+# pylint: disable=missing-function-docstring
+
 import os
 import shutil
 import tempfile
 
 import pytest
 
-from mocket.mocket import mocketize
+from mocket.mocket import mocketize  # type: ignore
 
-from authenticate import Authentication
+from authenticate import Authentication, parse_message
 
 
 @mocketize
-def test_authenticator_parses_messages_correctly():
-    instance = Authentication("email", "model_name")
+def test_messages_are_parsed_correctly():
     message = {"variant": {"key": "value"}}
-    variant, data = instance.parse_message(message)
+    variant, data = parse_message(message)
 
     assert variant == "variant"
     assert data == {"key": "value"}
@@ -21,20 +28,18 @@ def test_authenticator_parses_messages_correctly():
 
 @mocketize
 def test_invalid_messages_fail_to_parse():
-    instance = Authentication("email", "model_name")
     message = {"variant": {"key": "value"}, "another": "value"}
 
     with pytest.raises(IndexError):
-        instance.parse_message(message)
+        parse_message(message)
 
 
 @mocketize
 def test_empty_messages_fail_to_parse():
-    instance = Authentication("email", "model_name")
     message = {}
 
     with pytest.raises(IndexError):
-        instance.parse_message(message)
+        parse_message(message)
 
 
 @mocketize

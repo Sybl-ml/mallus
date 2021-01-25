@@ -1,16 +1,20 @@
 """ Module for client registration """
 import socket
-from socket import socket as Socket
 import json
 import struct
-from enum import Enum, auto
-from typing import Callable, Optional, Dict, Tuple, List, Union
 import logging
 import io
 
-from xdg import xdg_data_home
-import pandas as pd
+from enum import Enum, auto
+from socket import socket as Socket
+from typing import Callable, Optional, Dict, Tuple, List, Union
 
+import pandas as pd  # type: ignore
+
+from xdg import xdg_data_home
+
+# This is a bug in Pylint: https://github.com/PyCQA/pylint/issues/3882
+# pylint: disable=unsubscriptable-object
 
 SYBL_IP: str = "127.0.0.1"
 DCL_SOCKET: int = 7000
@@ -87,6 +91,9 @@ class Sybl:
                 PermissionError: raised when the accesstoken cannot be authorized
 
         """
+        # Check the user has specified a callback here
+        assert self.callback is not None
+
         self._sock.connect((SYBL_IP, DCL_SOCKET))
         logger.info("Connected")
 
@@ -166,6 +173,9 @@ class Sybl:
             train_pd = pd.read_csv(io.StringIO(train))
             predict_pd = pd.read_csv(io.StringIO(predict))
 
+            # Check the user has specified a callback here to satisfy mypy
+            assert self.callback is not None
+
             predictions = self.callback(train_pd, predict_pd)
             message = {"Predictions": predictions.to_csv(index=False)}
             self._send_message(message)
@@ -186,7 +196,6 @@ class Sybl:
             self._message_stack.append(response)
 
     def _process_job_config(self) -> bool:
-
         while self._state == State.READ_JOB:
 
             if self._message_stack:
@@ -196,7 +205,8 @@ class Sybl:
 
             self._state = State.PROCESSING
             logger.info("ACCEPTING JOB")
-            return True
+
+        return True
 
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 
@@ -231,23 +241,23 @@ class Sybl:
 
         if size > 4096:
             remaining_size = size
-            buffer = []
+            buf: List[int] = []
 
             while remaining_size > 0:
                 chunk = self._sock.recv(4096)
-                buffer.extend(chunk)
+                buf.extend(chunk)
 
                 remaining_size -= 4096
 
-            return json.loads(buffer)
+            return json.loads(bytes(buf))
 
         return json.loads(self._sock.recv(size))
 
-    def _send_message(self, message: Union[Dict, str], dump=True):
-        data = json.dumps(message) if dump else message
-        data = data.encode("utf-8")
+    def _send_message(self, message: Union[Dict, str]):
+        data = json.dumps(message) if isinstance(message, dict) else message
+        encoded = data.encode("utf-8")
 
         length = (len(data)).to_bytes(4, byteorder="big")
         # print("length: {}".format(length))
 
-        self._sock.send(length + data)
+        self._sock.send(length + encoded)
