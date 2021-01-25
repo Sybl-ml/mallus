@@ -2,7 +2,7 @@
 An example for users connecting to the Sybl service and waiting for data.
 """
 
-import pandas as pd # type: ignore
+import pandas as pd  # type: ignore
 
 from sybl.client import Sybl
 
