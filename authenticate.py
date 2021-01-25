@@ -1,3 +1,15 @@
+"""
+Contains authentication primitives for creating a new model.
+
+Clients will be asked for their email and model name before this is sent to the
+DCL. The user's private key will then be used to sign the resulting challenge
+and their `sybl.json` will be updated with the model identifier and access
+token.
+"""
+
+# This is a bug in Pylint: https://github.com/PyCQA/pylint/issues/3882
+# pylint: disable=unsubscriptable-object
+
 import socket
 import json
 import os
@@ -5,9 +17,9 @@ import base64
 import struct
 
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, Optional, List, Tuple, Union
 
-from OpenSSL import crypto
+from OpenSSL import crypto  # type: ignore
 from dotenv import load_dotenv
 from xdg import xdg_data_home
 
@@ -17,58 +29,68 @@ DCL_SOCKET: int = 7000
 DCL_IP: str = "127.0.0.1"
 
 
+def sign_challenge(challenge: bytes, private_key: str) -> bytes:
+    """
+    Signs the challenge provided by the API server with the user's private
+    key.
+
+    Args:
+        challenge: The bytes of the challenge provided
+        private_key: The user's private key
+
+    Returns: Bytes that have been signed with their key
+
+    """
+
+    private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, private_key)
+    return crypto.sign(private_key, challenge, "sha256")
+
+
+def parse_message(message: Dict) -> Tuple[str, Any]:
+    """
+    Parses a message and ensures it has a single variant.
+
+    Args:
+        message: The message to parse
+
+    Returns: The message variant and data content
+
+    Raises:
+        IndexError: If the message doesn't have exactly 1 key
+
+    """
+
+    keys: List[str] = list(message)
+
+    if len(keys) > 1:
+        raise IndexError
+
+    variant: str = keys[0]
+    data: Any = message[variant]
+
+    return (variant, data)
+
+
 class Authentication:
-    def __init__(self, email, model_name):
+    """
+    Contains methods used for authenticating a client with the DCL.
+
+    Generally, clients will not instantiate this themselves, and will simply
+    run this file. This will allow them to create a new model and update their
+    `sybl.json` for them.
+    """
+
+    def __init__(self, email: str, model_name: str):
         self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.stream.connect(("127.0.0.1", DCL_SOCKET))
 
-        self.email = email
-        self.model_name = model_name
+        self.email: str = email
+        self.model_name: str = model_name
 
-        self.access_token = None
-        self.model_id = None
+        self.access_token: Optional[str] = None
+        self.model_id: Optional[str] = None
 
-    def sign_challenge(self, challenge: List[bytes], private_key: str) -> List[bytes]:
-        """
-        Signs the challenge provided by the API server with the user's private
-        key.
-
-        Args:
-            challenge: The bytes of the challenge provided
-            private_key: The user's private key
-
-        Returns: Bytes that have been signed with their key
-
-        """
-
-        private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, private_key)
-        return crypto.sign(private_key, challenge, "sha256")
-
-    def parse_message(self, message: Dict) -> Tuple[str, Any]:
-        """
-        Parses a message and ensures it has a single variant.
-
-        Args:
-            message: The message to parse
-
-        Returns: The message variant and data content
-
-        Raises:
-            IndexError: If the message doesn't have exactly 1 key
-
-        """
-
-        keys: List[str] = list(message)
-
-        if len(keys) > 1:
-            raise IndexError
-
-        variant: str = keys[0]
-        data: Any = message[variant]
-
-        return (variant, data)
-
-    def authenticate_challenge(self, challenge: Dict):
+    def authenticate_challenge(self, message: Dict[Any, Any]):
         """
         Authenticates a challenge message and responds to the requestor.
 
@@ -81,13 +103,12 @@ class Authentication:
 
         """
 
-        challenge = challenge["challenge"]
+        challenge = message["challenge"]
         print("Authenticating challenge")
+
         try:
             private_key = os.environ["PRIVATE_KEY"]
-            signed_challenge = self.sign_challenge(
-                base64.b64decode(challenge), private_key
-            )
+            signed_challenge = sign_challenge(base64.b64decode(challenge), private_key)
 
             message = {
                 "ChallengeResponse": {
@@ -116,8 +137,8 @@ class Authentication:
         """
 
         try:
-            self.access_token: str = message["token"]
-            self.model_id: str = message["id"]
+            self.access_token = message["token"]
+            self.model_id = message["id"]
 
             print(
                 "ACCESS TOKEN: {} \n MODEL ID: {}".format(
@@ -148,7 +169,7 @@ class Authentication:
             print("data: {}".format(data))
 
             try:
-                variant, data = self.parse_message(data)
+                variant, data = parse_message(data)
 
                 if variant == "Challenge":
                     self.authenticate_challenge(data)
@@ -213,38 +234,39 @@ class Authentication:
 
         if size > 4096:
             remaining_size = size
-            buffer = []
+            buf: List[int] = []
 
             while remaining_size > 0:
                 chunk = self.stream.recv(4096)
-                buffer.extend(chunk)
+                buf.extend(chunk)
 
                 remaining_size -= 4096
 
-            return json.loads(buffer)
+            return json.loads(bytes(buf))
 
         return json.loads(self.stream.recv(size))
 
-    def _send_message(self, message: Union[Dict, str], dump=True):
+    def _send_message(self, message: Union[Dict, str]):
         """
         Serialises a dictionary into JSON and sends it across the stream.
         Messages will be length prefixed before sending.
 
         Args:
             message: The message to send
-            dump: Whether to use `json.dumps` before handling the message
 
         """
-        data = json.dumps(message) if dump else message
-        data = data.encode("utf-8")
+        readable: str = json.dumps(message) if isinstance(message, dict) else message
+        data: bytes = readable.encode("utf-8")
 
         length = (len(data)).to_bytes(4, byteorder="big")
-        # print("length: {}".format(length))
 
         self.stream.send(length + data)
 
 
 def main():
+    """
+    The entry point for authentication.
+    """
 
     email: str = input("Enter email: ")
     name: str = input("Enter name of model: ")
