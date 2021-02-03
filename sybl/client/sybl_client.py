@@ -173,10 +173,34 @@ class Sybl:
             train_pd = pd.read_csv(io.StringIO(train))
             predict_pd = pd.read_csv(io.StringIO(predict))
 
+            predict_rids = None
+
+            if "record_id" in train_pd.columns:
+                # Take record ids from training set
+                train_pd = train_pd.drop(["record_id"], axis=1)
+                print("Training Data: {}".format(train_pd))
+
+                # Take record ids from predict set and store for later
+                predict_rids = predict_pd[["record_id"]]
+                print("Predict Record IDs: {}".format(predict_rids))
+
+                predict_pd = predict_pd.drop(["record_id"], axis=1)
+                print("Predict Data: {}".format(predict_pd))
+            else:
+                raise AttributeError("Datasets must have record ids for each row")
+
             # Check the user has specified a callback here to satisfy mypy
             assert self.callback is not None
 
             predictions = self.callback(train_pd, predict_pd)
+
+            # Attatch record ids onto predictions
+            if predict_rids is not None:
+                predictions["record_id"] = predict_rids
+                cols = predictions.columns.tolist()
+                cols = cols[-1:] + cols[:-1]
+                predictions = predictions[cols]
+
             message = {"Predictions": predictions.to_csv(index=False)}
             self._send_message(message)
             self._state = State.HEARTBEAT
