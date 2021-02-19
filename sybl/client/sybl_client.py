@@ -243,6 +243,8 @@ class Sybl:
             logger.info("ACCEPTING JOB")
             return True
 
+        return False
+
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 
         model_key: str = f"{email}.{model_name}"
