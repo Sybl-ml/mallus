@@ -13,6 +13,8 @@ import pandas as pd  # type: ignore
 
 from xdg import xdg_data_home
 
+from .job_config import JobConfig
+
 # This is a bug in Pylint: https://github.com/PyCQA/pylint/issues/3882
 # pylint: disable=unsubscriptable-object
 
@@ -53,7 +55,7 @@ class Sybl:
         self._state: State = State.AUTHENTICATING
 
         self.callback: Optional[Callable] = None
-        self.config: bool = False
+        self.config: JobConfig = JobConfig()
 
         self._message_stack: List[Dict] = []
 
@@ -131,7 +133,7 @@ class Sybl:
 
         return True
 
-    def load_config(self) -> None:
+    def load_config(self, config: JobConfig) -> None:
         """
         Load the clients job config
 
@@ -141,7 +143,7 @@ class Sybl:
             Returns:
                 None
         """
-        return
+        self.config = config
 
     def load_model(self, email: str, model_name: str) -> None:
         """
@@ -225,20 +227,25 @@ class Sybl:
             if self._message_stack:
                 job_config = self._message_stack.pop()
 
-            self._send_message({"response": "sure"})
+            assert self.config is not None
+            assert job_config.contains("JobConfig")
 
-            self._state = State.PROCESSING
-            logger.info("ACCEPTING JOB")
+            accept_job: bool = self.config.compare(job_config["JobConfig"])
 
-        return True
+            if accept_job:
+                self._send_message({"ConfigResponse": {"accept": True}})
+                self._state = State.PROCESSING
+                logger.info("ACCEPTING JOB")
+                return True
+            else:
+                self._send_message({"ConfigResponse": {"accept": False}})
+                self._state = State.HEARTBEAT
+                logger.info("REJECTING JOB")
+                return False
 
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 
         model_key: str = f"{email}.{model_name}"
-
-        if self.config:
-            logger.error("Config options not implemented")
-            raise ValueError("Config options not yet implemented")
 
         path = xdg_data_home() / "sybl.json"
         with path.open("r") as f:  # pylint: disable=invalid-name
@@ -274,8 +281,9 @@ class Sybl:
                 remaining_size -= 4096
 
             return json.loads(bytes(buf))
-
-        return json.loads(self._sock.recv(size))
+        message: Dict = json.loads(self._sock.recv(size))
+        logger.info(message)
+        return message
 
     def _send_message(self, message: Union[Dict, str]):
         data = json.dumps(message) if isinstance(message, dict) else message
