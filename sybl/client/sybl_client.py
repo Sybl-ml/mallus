@@ -228,20 +228,20 @@ class Sybl:
                 job_config = self._message_stack.pop()
 
             assert self.config is not None
-            assert job_config.contains("JobConfig")
+            assert "JobConfig" in job_config
 
             accept_job: bool = self.config.compare(job_config["JobConfig"])
 
-            if accept_job:
-                self._send_message({"ConfigResponse": {"accept": True}})
-                self._state = State.PROCESSING
-                logger.info("ACCEPTING JOB")
-                return True
-            else:
+            if not accept_job:
                 self._send_message({"ConfigResponse": {"accept": False}})
                 self._state = State.HEARTBEAT
                 logger.info("REJECTING JOB")
                 return False
+
+            self._send_message({"ConfigResponse": {"accept": True}})
+            self._state = State.PROCESSING
+            logger.info("ACCEPTING JOB")
+            return True
 
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 

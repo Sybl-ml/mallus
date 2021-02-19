@@ -14,4 +14,4 @@ class JobConfig:
         timeout: int = job_config["timeout"]
         prediction_type: str = job_config["prediction_type"].lower()
 
-        return timeout < self.timeout and prediction_type in self.prediction_types
+        return timeout < self.max_timeout and prediction_type in self.prediction_types
