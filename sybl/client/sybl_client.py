@@ -113,7 +113,10 @@ class Sybl:
             while self._state == State.HEARTBEAT:
                 self._heartbeat()
 
-            if self._process_job_config():
+            if self._state == State.READ_JOB:
+                self._process_job_config()
+
+            elif self._state == State.PROCESSING:
                 self._process_job()
 
     def _is_authenticated(self) -> bool:
@@ -165,47 +168,49 @@ class Sybl:
 
     def _process_job(self) -> None:
         logger.info("PROCCESSING JOB")
-        while self._state == State.PROCESSING:
 
-            data: Dict = self._read_message()
+        if self._message_stack:
+            data: Dict = self._message_stack.pop()
 
-            train = data["Dataset"]["train"]
-            predict = data["Dataset"]["predict"]
+        assert "Dataset" in data
 
-            train_pd = pd.read_csv(io.StringIO(train))
-            predict_pd = pd.read_csv(io.StringIO(predict))
+        train = data["Dataset"]["train"]
+        predict = data["Dataset"]["predict"]
 
-            predict_rids = None
+        train_pd = pd.read_csv(io.StringIO(train))
+        predict_pd = pd.read_csv(io.StringIO(predict))
 
-            if "record_id" in train_pd.columns:
-                # Take record ids from training set
-                train_pd = train_pd.drop(["record_id"], axis=1)
-                print("Training Data: {}".format(train_pd))
+        predict_rids = None
 
-                # Take record ids from predict set and store for later
-                predict_rids = predict_pd[["record_id"]]
-                print("Predict Record IDs: {}".format(predict_rids))
+        if "record_id" in train_pd.columns:
+            # Take record ids from training set
+            train_pd = train_pd.drop(["record_id"], axis=1)
+            logger.debug("Training Data: {}".format(train_pd.head()))
 
-                predict_pd = predict_pd.drop(["record_id"], axis=1)
-                print("Predict Data: {}".format(predict_pd))
-            else:
-                raise AttributeError("Datasets must have record ids for each row")
+            # Take record ids from predict set and store for later
+            predict_rids = predict_pd[["record_id"]]
+            logger.debug("Predict Record IDs: {}".format(predict_rids.head()))
 
-            # Check the user has specified a callback here to satisfy mypy
-            assert self.callback is not None
+            predict_pd = predict_pd.drop(["record_id"], axis=1)
+            logger.debug("Predict Data: {}".format(predict_pd.head()))
+        else:
+            raise AttributeError("Datasets must have record ids for each row")
 
-            predictions = self.callback(train_pd, predict_pd)
+        # Check the user has specified a callback here to satisfy mypy
+        assert self.callback is not None
 
-            # Attatch record ids onto predictions
-            if predict_rids is not None:
-                predictions["record_id"] = predict_rids
-                cols = predictions.columns.tolist()
-                cols = cols[-1:] + cols[:-1]
-                predictions = predictions[cols]
+        predictions = self.callback(train_pd, predict_pd)
 
-            message = {"Predictions": predictions.to_csv(index=False)}
-            self._send_message(message)
-            self._state = State.HEARTBEAT
+        # Attatch record ids onto predictions
+        if predict_rids is not None:
+            predictions["record_id"] = predict_rids
+            cols = predictions.columns.tolist()
+            cols = cols[-1:] + cols[:-1]
+            predictions = predictions[cols]
+
+        message = {"Predictions": predictions.to_csv(index=False)}
+        self._send_message(message)
+        self._state = State.HEARTBEAT
 
     def _heartbeat(self) -> None:
 
@@ -220,30 +225,28 @@ class Sybl:
             logger.info("RECIEVED JOB CONFIG")
             self._state = State.READ_JOB
             self._message_stack.append(response)
-
-    def _process_job_config(self) -> bool:
-        while self._state == State.READ_JOB:
-
-            if self._message_stack:
-                job_config = self._message_stack.pop()
-
-            assert self.config is not None
-            assert "JobConfig" in job_config
-
-            accept_job: bool = self.config.compare(job_config["JobConfig"])
-
-            if not accept_job:
-                self._send_message({"ConfigResponse": {"accept": False}})
-                self._state = State.HEARTBEAT
-                logger.info("REJECTING JOB")
-                return False
-
-            self._send_message({"ConfigResponse": {"accept": True}})
+        elif "Dataset" in response.keys():
+            logger.info("RECIEVED DATASET")
             self._state = State.PROCESSING
-            logger.info("ACCEPTING JOB")
-            return True
+            self._message_stack.append(response)
 
-        return False
+    def _process_job_config(self) -> None:
+        if self._message_stack:
+            job_config = self._message_stack.pop()
+
+        assert self.config is not None
+        assert "JobConfig" in job_config
+
+        accept_job: bool = self.config.compare(job_config["JobConfig"])
+
+        if not accept_job:
+            self._send_message({"ConfigResponse": {"accept": False}})
+            logger.info("REJECTING JOB")
+        else:
+            self._send_message({"ConfigResponse": {"accept": True}})
+            logger.info("ACCEPTING JOB")
+
+        self._state = State.HEARTBEAT
 
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 
