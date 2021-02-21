@@ -113,7 +113,10 @@ class Sybl:
             while self._state == State.HEARTBEAT:
                 self._heartbeat()
 
-            if self._process_job_config():
+            if self._state == State.READ_JOB:
+                self._process_job_config()
+
+            elif self._state == State.PROCESSING:
                 self._process_job()
 
     def _is_authenticated(self) -> bool:
@@ -167,7 +170,10 @@ class Sybl:
         logger.info("PROCCESSING JOB")
         while self._state == State.PROCESSING:
 
-            data: Dict = self._read_message()
+            if self._message_stack:
+                data: Dict = self._message_stack.pop()
+            
+            assert "Dataset" in data
 
             train = data["Dataset"]["train"]
             predict = data["Dataset"]["predict"]
@@ -220,8 +226,12 @@ class Sybl:
             logger.info("RECIEVED JOB CONFIG")
             self._state = State.READ_JOB
             self._message_stack.append(response)
+        elif "Dataset" in response.keys():
+            logger.info("RECIEVED DATASET")
+            self._state = State.PROCESSING
+            self._message_stack.append(response)
 
-    def _process_job_config(self) -> bool:
+    def _process_job_config(self) -> None:
         while self._state == State.READ_JOB:
 
             if self._message_stack:
@@ -234,16 +244,12 @@ class Sybl:
 
             if not accept_job:
                 self._send_message({"ConfigResponse": {"accept": False}})
-                self._state = State.HEARTBEAT
                 logger.info("REJECTING JOB")
-                return False
+            else:
+                self._send_message({"ConfigResponse": {"accept": True}})
+                logger.info("ACCEPTING JOB")
 
-            self._send_message({"ConfigResponse": {"accept": True}})
-            self._state = State.PROCESSING
-            logger.info("ACCEPTING JOB")
-            return True
-
-        return False
+            self._state = State.HEARTBEAT
 
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 
