@@ -168,50 +168,49 @@ class Sybl:
 
     def _process_job(self) -> None:
         logger.info("PROCCESSING JOB")
-        while self._state == State.PROCESSING:
 
-            if self._message_stack:
-                data: Dict = self._message_stack.pop()
+        if self._message_stack:
+            data: Dict = self._message_stack.pop()
 
-            assert "Dataset" in data
+        assert "Dataset" in data
 
-            train = data["Dataset"]["train"]
-            predict = data["Dataset"]["predict"]
+        train = data["Dataset"]["train"]
+        predict = data["Dataset"]["predict"]
 
-            train_pd = pd.read_csv(io.StringIO(train))
-            predict_pd = pd.read_csv(io.StringIO(predict))
+        train_pd = pd.read_csv(io.StringIO(train))
+        predict_pd = pd.read_csv(io.StringIO(predict))
 
-            predict_rids = None
+        predict_rids = None
 
-            if "record_id" in train_pd.columns:
-                # Take record ids from training set
-                train_pd = train_pd.drop(["record_id"], axis=1)
-                print("Training Data: {}".format(train_pd))
+        if "record_id" in train_pd.columns:
+            # Take record ids from training set
+            train_pd = train_pd.drop(["record_id"], axis=1)
+            logger.debug("Connected")("Training Data: {}".format(train_pd))
 
-                # Take record ids from predict set and store for later
-                predict_rids = predict_pd[["record_id"]]
-                print("Predict Record IDs: {}".format(predict_rids))
+            # Take record ids from predict set and store for later
+            predict_rids = predict_pd[["record_id"]]
+            logger.debug("Predict Record IDs: {}".format(predict_rids))
 
-                predict_pd = predict_pd.drop(["record_id"], axis=1)
-                print("Predict Data: {}".format(predict_pd))
-            else:
-                raise AttributeError("Datasets must have record ids for each row")
+            predict_pd = predict_pd.drop(["record_id"], axis=1)
+            logger.debug("Predict Data: {}".format(predict_pd))
+        else:
+            raise AttributeError("Datasets must have record ids for each row")
 
-            # Check the user has specified a callback here to satisfy mypy
-            assert self.callback is not None
+        # Check the user has specified a callback here to satisfy mypy
+        assert self.callback is not None
 
-            predictions = self.callback(train_pd, predict_pd)
+        predictions = self.callback(train_pd, predict_pd)
 
-            # Attatch record ids onto predictions
-            if predict_rids is not None:
-                predictions["record_id"] = predict_rids
-                cols = predictions.columns.tolist()
-                cols = cols[-1:] + cols[:-1]
-                predictions = predictions[cols]
+        # Attatch record ids onto predictions
+        if predict_rids is not None:
+            predictions["record_id"] = predict_rids
+            cols = predictions.columns.tolist()
+            cols = cols[-1:] + cols[:-1]
+            predictions = predictions[cols]
 
-            message = {"Predictions": predictions.to_csv(index=False)}
-            self._send_message(message)
-            self._state = State.HEARTBEAT
+        message = {"Predictions": predictions.to_csv(index=False)}
+        self._send_message(message)
+        self._state = State.HEARTBEAT
 
     def _heartbeat(self) -> None:
 
@@ -232,24 +231,22 @@ class Sybl:
             self._message_stack.append(response)
 
     def _process_job_config(self) -> None:
-        while self._state == State.READ_JOB:
+        if self._message_stack:
+            job_config = self._message_stack.pop()
 
-            if self._message_stack:
-                job_config = self._message_stack.pop()
+        assert self.config is not None
+        assert "JobConfig" in job_config
 
-            assert self.config is not None
-            assert "JobConfig" in job_config
+        accept_job: bool = self.config.compare(job_config["JobConfig"])
 
-            accept_job: bool = self.config.compare(job_config["JobConfig"])
+        if not accept_job:
+            self._send_message({"ConfigResponse": {"accept": False}})
+            logger.info("REJECTING JOB")
+        else:
+            self._send_message({"ConfigResponse": {"accept": True}})
+            logger.info("ACCEPTING JOB")
 
-            if not accept_job:
-                self._send_message({"ConfigResponse": {"accept": False}})
-                logger.info("REJECTING JOB")
-            else:
-                self._send_message({"ConfigResponse": {"accept": True}})
-                logger.info("ACCEPTING JOB")
-
-            self._state = State.HEARTBEAT
+        self._state = State.HEARTBEAT
 
     def _load_access_token(self, email, model_name) -> Tuple[str, str]:
 
