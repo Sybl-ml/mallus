@@ -172,7 +172,7 @@ class Sybl:
 
             if self._message_stack:
                 data: Dict = self._message_stack.pop()
-            
+
             assert "Dataset" in data
 
             train = data["Dataset"]["train"]
