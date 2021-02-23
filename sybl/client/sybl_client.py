@@ -39,6 +39,25 @@ class State(Enum):
     PROCESSING: int = auto()
 
 
+def load_access_token(email, model_name) -> Tuple[str, str]:
+
+    model_key: str = f"{email}.{model_name}"
+
+    path = xdg_data_home() / "sybl.json"
+    with path.open("r") as f:  # pylint: disable=invalid-name
+
+        file_contents: str = f.read()
+        models_dict: Dict = json.loads(file_contents)
+
+        try:
+            model_data = models_dict[model_key]
+
+            return model_data["access_token"], model_data["model_id"]
+        except KeyError as e:  # pylint: disable=invalid-name
+            logger.error("Model not registered")
+            raise ValueError(f"Model {model_name} not registered to {email}")
+
+
 class Sybl:
     """ Main sybl class for a client to use to process data """
 
@@ -94,20 +113,24 @@ class Sybl:
 
         """
         # Check the user has specified a callback here
-        assert self.callback is not None
-
-        self._sock.connect((SYBL_IP, DCL_SOCKET))
-        logger.info("Connected")
+        if self.callback is None:
+            raise AttributeError("Callback has not been registered")
 
         if not self._access_token or not self._model_id:
             logger.error("Model has not been loaded")
             raise AttributeError("Model access token and ID have not been loaded")
 
+        self._sock.connect((SYBL_IP, DCL_SOCKET))
+        logger.info("Connected")
+
         if not self._is_authenticated():
             raise PermissionError("Model access token has not been authenticated")
 
-        # Check the message for authentication successfull
         self._state = State.HEARTBEAT
+        self._begin_state_machine()
+
+    def _begin_state_machine(self):
+        # Check the message for authentication successfull
 
         while True:
             while self._state == State.HEARTBEAT:
@@ -130,11 +153,14 @@ class Sybl:
 
         self._send_message(response)
         message = self._read_message()
-        if message["message"] != "Authentication successful":
-            logger.error("Authentication not successful")
-            return False
+        try:
+            if message["message"] == "Authentication successful":
+                logger.error("Authentication not successful")
+                return True
+        except KeyError:
+            pass
 
-        return True
+        return False
 
     def load_config(self, config: JobConfig) -> None:
         """
@@ -146,7 +172,10 @@ class Sybl:
             Returns:
                 None
         """
-        self.config = config
+        if type(config) is JobConfig:
+            self.config = config
+        else:
+            raise AttributeError("Config must be valid JobConfig")
 
     def load_model(self, email: str, model_name: str) -> None:
         """
@@ -161,7 +190,7 @@ class Sybl:
                 None
         """
 
-        self._access_token, self._model_id = self._load_access_token(email, model_name)
+        self._access_token, self._model_id = self.load_access_token(email, model_name)
 
         self.email = email
         self.model_name = model_name
@@ -220,6 +249,7 @@ class Sybl:
 
         if "Alive" in response.keys():
             # Write it back
+            self._state = State.HEARTBEAT
             self._send_message(response)
         elif "JobConfig" in response.keys():
             logger.info("RECIEVED JOB CONFIG")
@@ -233,9 +263,16 @@ class Sybl:
     def _process_job_config(self) -> None:
         if self._message_stack:
             job_config = self._message_stack.pop()
+        else:
+            logger.error("Empty Message Stack!\n RETURNING TO HEARTBEAT")
+            self._state = State.HEARTBEAT
+            return
 
         assert self.config is not None
-        assert "JobConfig" in job_config
+        if "JobConfig" not in job_config:
+            logger.warn("Invalid Job Config Message")
+            self._state = State.HEARTBEAT
+            return
 
         accept_job: bool = self.config.compare(job_config["JobConfig"])
 
@@ -247,26 +284,6 @@ class Sybl:
             logger.info("ACCEPTING JOB")
 
         self._state = State.HEARTBEAT
-
-    def _load_access_token(self, email, model_name) -> Tuple[str, str]:
-
-        model_key: str = f"{email}.{model_name}"
-
-        path = xdg_data_home() / "sybl.json"
-        with path.open("r") as f:  # pylint: disable=invalid-name
-
-            file_contents: str = f.read()
-            models_dict: Dict = json.loads(file_contents)
-
-            try:
-                model_data = models_dict[model_key]
-
-                return model_data["access_token"], model_data["model_id"]
-            except ValueError as e:  # pylint: disable=invalid-name
-                logger.error("Model not registered")
-                raise ValueError(
-                    f"Model {self.model_name} not registered to {self.email}"
-                ) from e
 
     def _read_message(self) -> Dict:
         size_bytes = self._sock.recv(4)
