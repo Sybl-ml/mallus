@@ -147,12 +147,15 @@ class Sybl:
         # Check the message for authentication successfull
 
         while True:
-            while self._state == State.HEARTBEAT:
-                self._heartbeat()
 
+            # Keep looping while heartbeating
+            while self._state == State.HEARTBEAT:
+                self._message_control()
+
+            # If it is a job config, evaluate it
             if self._state == State.READ_JOB:
                 self._process_job_config()
-
+            # Otherwise it is data, which should be used in callback
             elif self._state == State.PROCESSING:
                 self._process_job()
 
@@ -212,32 +215,22 @@ class Sybl:
     def _process_job(self) -> None:
         logger.info("PROCCESSING JOB")
 
+        # Get message from message stack
         if self._message_stack:
             data: Dict = self._message_stack.pop()
 
+        # Make sure the dataset ia actually there
         assert "Dataset" in data
 
+        # Get training and prediction datasets
         train = data["Dataset"]["train"]
         predict = data["Dataset"]["predict"]
 
         train_pd = pd.read_csv(io.StringIO(train))
         predict_pd = pd.read_csv(io.StringIO(predict))
 
-        predict_rids = None
-
-        if "record_id" in train_pd.columns:
-            # Take record ids from training set
-            train_pd = train_pd.drop(["record_id"], axis=1)
-            logger.debug("Training Data: %s", train_pd.head())
-
-            # Take record ids from predict set and store for later
-            predict_rids = predict_pd[["record_id"]]
-            logger.debug("Predict Record IDs: %s", predict_rids.head())
-
-            predict_pd = predict_pd.drop(["record_id"], axis=1)
-            logger.debug("Predict Data: %s", predict_pd.head())
-        else:
-            raise AttributeError("Datasets must have record ids for each row")
+        # Prepare the datasets for callback
+        train_pd, predict_pd, predict_rids = self._prepare_datasets(train_pd, predict_pd)
 
         # Check the user has specified a callback here to satisfy mypy
         assert self.callback is not None
@@ -255,7 +248,24 @@ class Sybl:
         self._send_message(message)
         self._state = State.HEARTBEAT
 
-    def _heartbeat(self) -> None:
+    def _prepare_datasets(self, train, prediction) -> Tuple[pd.DataFrame,pd.DataFrame, List] :
+        if "record_id" in train.columns:
+            # Take record ids from training set
+            train = train.drop(["record_id"], axis=1)
+            logger.debug("Training Data: %s", train.head())
+
+            # Take record ids from predict set and store for later
+            predict_rids = prediction[["record_id"]]
+            logger.debug("Predict Record IDs: %s", predict_rids.head())
+
+            prediction = prediction.drop(["record_id"], axis=1)
+            logger.debug("Predict Data: %s", prediction.head())
+        else:
+            raise AttributeError("Datasets must have record ids for each row")
+
+        return (train, prediction, predict_rids)
+
+    def _message_control(self) -> None:
 
         response: Dict = self._read_message()
 

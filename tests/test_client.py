@@ -6,6 +6,7 @@ and correct responses to messages sent from the DCL
 import os
 import tempfile
 from unittest.mock import Mock
+import pandas as pd
 
 import pytest
 
@@ -132,7 +133,7 @@ def test_reject_bad_config(sybl_instance):
         sybl_instance.load_config(bad_config)
 
 
-def test_heartbeat(sybl_instance):
+def test_message_control(sybl_instance):
 
     responses = [
         ({"Alive": ""}, State.HEARTBEAT),
@@ -143,7 +144,7 @@ def test_heartbeat(sybl_instance):
     for response in responses:
         sybl_instance._read_message = Mock(return_value=response[0])
 
-        sybl_instance._heartbeat()
+        sybl_instance._message_control()
         assert sybl_instance._state == response[1]
 
 
@@ -217,3 +218,12 @@ def test_file_does_not_exist(sybl_instance):
 
     with pytest.raises(FileNotFoundError):
         load_access_token(sybl_instance.email, sybl_instance.model_name)
+
+def test_remove_record_ids(sybl_instance):
+    train = pd.DataFrame([1, "Data1"],[2, "Data2"], columns =['record_id', 'col1'])
+    prediction = pd.DataFrame([3, "Data3"],[4, "Data4"], columns =['record_id', 'col1'])
+    initial_pids = prediction[["record_id"]]
+    train, prediction, predict_rids = sybl_instance._prepare_datasets(train, prediction)
+
+    assert ("record_id" not in list(train.columns)) and ("record_id" not in list(prediction.columns))
+    assert predict_rids == initial_pids
