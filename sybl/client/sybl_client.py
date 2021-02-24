@@ -230,33 +230,43 @@ class Sybl:
         predict_pd = pd.read_csv(io.StringIO(predict))
 
         # Prepare the datasets for callback
-        train_pd, predict_pd, predict_rids = self._prepare_datasets(train_pd, predict_pd)
+        train_pd, predict_pd, predict_rids = self._prepare_datasets(
+            train_pd, predict_pd
+        )
 
         # Check the user has specified a callback here to satisfy mypy
         assert self.callback is not None
 
         predictions = self.callback(train_pd, predict_pd)
 
+        logger.debug("PIDS: %s", predict_rids)
+
+        logger.debug("Predictions: %s", predictions.head())
+
         # Attatch record ids onto predictions
-        if predict_rids is not None:
-            predictions["record_id"] = predict_rids
-            cols = predictions.columns.tolist()
-            cols = cols[-1:] + cols[:-1]
-            predictions = predictions[cols]
+        predictions["record_id"] = predict_rids
+        cols = predictions.columns.tolist()
+        cols = cols[-1:] + cols[:-1]
+        predictions = predictions[cols]
+
+        assert len(predictions.index) == len(predict_pd.index)
 
         message = {"Predictions": predictions.to_csv(index=False)}
         self._send_message(message)
+        logger.info("Sent message")
         self._state = State.HEARTBEAT
 
-    def _prepare_datasets(self, train, prediction) -> Tuple[pd.DataFrame,pd.DataFrame, List] :
+    def _prepare_datasets(
+        self, train, prediction
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, List]:
         if "record_id" in train.columns:
             # Take record ids from training set
             train = train.drop(["record_id"], axis=1)
             logger.debug("Training Data: %s", train.head())
 
             # Take record ids from predict set and store for later
-            predict_rids = prediction[["record_id"]]
-            logger.debug("Predict Record IDs: %s", predict_rids.head())
+            predict_rids = prediction["record_id"].tolist()
+            logger.debug("Predict Record IDs: %s", predict_rids[:5])
 
             prediction = prediction.drop(["record_id"], axis=1)
             logger.debug("Predict Data: %s", prediction.head())

@@ -6,7 +6,9 @@ and correct responses to messages sent from the DCL
 import os
 import tempfile
 from unittest.mock import Mock
-import pandas as pd
+import pandas as pd  # type: ignore
+import numpy as np  # type: ignore
+import io  # type: ignore
 
 import pytest
 
@@ -37,15 +39,36 @@ def valid_dataset():
 
     dataset = {
         "Dataset": {
-            "train": """record_id,a,b,c,d,e,f
-            0,1,2,3,4,5
-            0,1,2,3,4,5
-            0,1,2,3,4,5
+            "train": """record_id,a,b,c,d,e
+            1,1,2,3,4,5
+            2,1,2,3,4,5
+            3,1,2,3,4,5
             """,
-            "predict": """record_id,a,b,c,d,e,f
-            0,1,2,3,4,
-            0,1,2,3,4,
-            0,1,2,3,4,
+            "predict": """record_id,a,b,c,d,e
+            4,1,2,3,4,
+            5,1,2,3,4,
+            6,1,2,3,4,
+            """,
+        }
+    }
+
+    return dataset
+
+
+@pytest.fixture
+def invalid_dataset():
+
+    dataset = {
+        "Dataset": {
+            "train": """a,b,c,d,e
+            1,1,2,3,4
+            2,1,2,3,4
+            3,1,2,3,4
+            """,
+            "predict": """a,b,c,d,e
+            4,1,2,3,
+            5,1,2,3,
+            6,1,2,3,
             """,
         }
     }
@@ -219,11 +242,58 @@ def test_file_does_not_exist(sybl_instance):
     with pytest.raises(FileNotFoundError):
         load_access_token(sybl_instance.email, sybl_instance.model_name)
 
-def test_remove_record_ids(sybl_instance):
-    train = pd.DataFrame({'record_id':[1,2],'col1':["Data1", "Data2"]})
-    prediction = pd.DataFrame({'record_id':[3,4],'col1':["Data3", "Data4"]})
-    initial_pids = prediction[["record_id"]]
+
+def test_prepare_dataset(sybl_instance):
+
+    train = pd.DataFrame({"record_id": [1, 2], "col1": ["Data1", "Data2"]})
+    prediction = pd.DataFrame({"record_id": [3, 4], "col1": ["Data3", "Data4"]})
+    initial_pids = prediction["record_id"].tolist()
     train, prediction, predict_rids = sybl_instance._prepare_datasets(train, prediction)
 
-    assert ("record_id" not in list(train.columns)) and ("record_id" not in list(prediction.columns))
+    assert ("record_id" not in list(train.columns)) and (
+        "record_id" not in list(prediction.columns)
+    )
     assert predict_rids == initial_pids
+
+
+def test_process_job(sybl_instance, valid_dataset):
+
+    sybl_instance._state == State.PROCESSING
+
+    train = pd.read_csv(io.StringIO(valid_dataset["Dataset"]["train"]))
+    predict = pd.read_csv(io.StringIO(valid_dataset["Dataset"]["predict"]))
+    predictions = pd.DataFrame(
+        {
+            predict.columns[-1]: np.repeat(
+                [train[train.columns[-1]].iloc[0]], len(predict.index)
+            )
+        }
+    )
+
+    sybl_instance.callback = Mock(return_value=predictions)
+
+    predictions["record_id"] = predict["record_id"]
+
+    sybl_instance._message_stack.append(valid_dataset)
+    sybl_instance._process_job()
+
+    assert sybl_instance._send_message.called
+
+    cols = predictions.columns.tolist()
+    cols = cols[-1:] + cols[:-1]
+    predictions = predictions[cols]
+
+    sybl_instance._send_message.assert_called_with(
+        {"Predictions": predictions.to_csv(index=False)}
+    )
+
+    assert sybl_instance._state == State.HEARTBEAT
+
+
+def test_bad_data_prepare_data(sybl_instance, invalid_dataset):
+
+    train = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["train"]))
+    prediction = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["predict"]))
+
+    with pytest.raises(AttributeError):
+        sybl_instance._prepare_datasets(train, prediction)
