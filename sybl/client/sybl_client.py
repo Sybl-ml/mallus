@@ -190,7 +190,7 @@ class Sybl:
                 None
         """
 
-        self._access_token, self._model_id = self.load_access_token(email, model_name)
+        self._access_token, self._model_id = load_access_token(email, model_name)
 
         self.email = email
         self.model_name = model_name
