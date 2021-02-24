@@ -6,9 +6,10 @@ and correct responses to messages sent from the DCL
 import os
 import tempfile
 from unittest.mock import Mock
+import io  # type: ignore
+
 import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
-import io  # type: ignore
 
 import pytest
 
