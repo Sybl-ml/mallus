@@ -17,6 +17,7 @@ from sybl.authenticate import Authentication
 
 # pylint: disable=protected-access
 # pylint: disable=missing-function-docstring
+# pylint: disable=redefined-outer-name
 
 
 @pytest.fixture(scope="function")
