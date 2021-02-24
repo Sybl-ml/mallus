@@ -16,7 +16,7 @@ import pytest
 from mocket.mocket import mocketize  # type: ignore
 
 from sybl.client import Sybl
-from sybl.client.sybl_client import State, load_access_token
+from sybl.client.sybl_client import State, load_access_token, prepare_datasets
 from sybl.authenticate import Authentication
 
 # pylint: disable=protected-access
@@ -249,7 +249,7 @@ def test_prepare_dataset(sybl_instance):
     train = pd.DataFrame({"record_id": [1, 2], "col1": ["Data1", "Data2"]})
     prediction = pd.DataFrame({"record_id": [3, 4], "col1": ["Data3", "Data4"]})
     initial_pids = prediction["record_id"].tolist()
-    train, prediction, predict_rids = sybl_instance._prepare_datasets(train, prediction)
+    train, prediction, predict_rids = prepare_datasets(train, prediction)
 
     assert ("record_id" not in list(train.columns)) and (
         "record_id" not in list(prediction.columns)
@@ -297,4 +297,4 @@ def test_bad_data_prepare_data(sybl_instance, invalid_dataset):
     prediction = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["predict"]))
 
     with pytest.raises(AttributeError):
-        sybl_instance._prepare_datasets(train, prediction)
+        prepare_datasets(train, prediction)

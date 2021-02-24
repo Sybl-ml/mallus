@@ -72,6 +72,29 @@ def load_access_token(email, model_name) -> Tuple[str, str]:
             raise ValueError(f"Model {model_name} not registered to {email}") from e
 
 
+def prepare_datasets(train, prediction) -> Tuple[pd.DataFrame, pd.DataFrame, List]:
+    """
+    Take in datasets to be used in computation and prepares them by removing
+    the record ids from each, saving and returning those from the prediction
+    set, as they are needed after prediction is done.
+    """
+    if "record_id" in train.columns:
+        # Take record ids from training set
+        train.drop(["record_id"], axis=1, inplace=True)
+        logger.debug("Training Data: %s", train.head())
+
+        # Take record ids from predict set and store for later
+        predict_rids = prediction["record_id"].tolist()
+        logger.debug("Predict Record IDs: %s", predict_rids[:5])
+
+        prediction = prediction.drop(["record_id"], axis=1)
+        logger.debug("Predict Data: %s", prediction.head())
+    else:
+        raise AttributeError("Datasets must have record ids for each row")
+
+    return (train, prediction, predict_rids)
+
+
 class Sybl:
     """ Main sybl class for a client to use to process data """
 
@@ -230,9 +253,7 @@ class Sybl:
         predict_pd = pd.read_csv(io.StringIO(predict))
 
         # Prepare the datasets for callback
-        train_pd, predict_pd, predict_rids = self._prepare_datasets(
-            train_pd, predict_pd
-        )
+        train_pd, predict_pd, predict_rids = prepare_datasets(train_pd, predict_pd)
 
         # Check the user has specified a callback here to satisfy mypy
         assert self.callback is not None
@@ -252,25 +273,6 @@ class Sybl:
         message = {"Predictions": predictions.to_csv(index=False)}
         self._send_message(message)
         self._state = State.HEARTBEAT
-
-    def _prepare_datasets(
-        self, train, prediction
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, List]:
-        if "record_id" in train.columns:
-            # Take record ids from training set
-            train.drop(["record_id"], axis=1, inplace=True)
-            logger.debug("Training Data: %s", train.head())
-
-            # Take record ids from predict set and store for later
-            predict_rids = prediction["record_id"].tolist()
-            logger.debug("Predict Record IDs: %s", predict_rids[:5])
-
-            prediction = prediction.drop(["record_id"], axis=1)
-            logger.debug("Predict Data: %s", prediction.head())
-        else:
-            raise AttributeError("Datasets must have record ids for each row")
-
-        return (train, prediction, predict_rids)
 
     def _message_control(self) -> None:
 
