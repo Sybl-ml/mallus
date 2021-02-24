@@ -239,8 +239,6 @@ class Sybl:
 
         predictions = self.callback(train_pd, predict_pd)
 
-        logger.debug("PIDS: %s", predict_rids)
-
         logger.debug("Predictions: %s", predictions.head())
 
         # Attatch record ids onto predictions
@@ -253,7 +251,6 @@ class Sybl:
 
         message = {"Predictions": predictions.to_csv(index=False)}
         self._send_message(message)
-        logger.info("Sent message")
         self._state = State.HEARTBEAT
 
     def _prepare_datasets(
