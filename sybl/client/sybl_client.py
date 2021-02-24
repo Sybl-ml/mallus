@@ -40,7 +40,21 @@ class State(Enum):
 
 
 def load_access_token(email, model_name) -> Tuple[str, str]:
+    """
+    Loads the access token from XDG_DATA_HOME using email and model name
 
+        Parameters:
+            email (str): The email the model is registered with
+            model_name (str): The name of the model to be loaded
+
+        Returns:
+            Tuple[str, str]: Tuple of access token and model id
+        Raise:
+            ValueError: raised if the model name and email pair is not found
+                in XDG_DATA_HOME
+            FileNotFoundError: raised if XDG_DATA_HOME/sybl.json is not found
+                meaning no access token has been stored
+    """
     model_key: str = f"{email}.{model_name}"
 
     path = xdg_data_home() / "sybl.json"
@@ -55,7 +69,7 @@ def load_access_token(email, model_name) -> Tuple[str, str]:
             return model_data["access_token"], model_data["model_id"]
         except KeyError as e:  # pylint: disable=invalid-name
             logger.error("Model not registered")
-            raise ValueError(f"Model {model_name} not registered to {email}")
+            raise ValueError(f"Model {model_name} not registered to {email}") from e
 
 
 class Sybl:
@@ -172,7 +186,7 @@ class Sybl:
             Returns:
                 None
         """
-        if type(config) is JobConfig:
+        if isinstance(config, JobConfig):
             self.config = config
         else:
             raise AttributeError("Config must be valid JobConfig")
@@ -270,7 +284,7 @@ class Sybl:
 
         assert self.config is not None
         if "JobConfig" not in job_config:
-            logger.warn("Invalid Job Config Message")
+            logger.warning("Invalid Job Config Message")
             self._state = State.HEARTBEAT
             return
 
