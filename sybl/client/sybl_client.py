@@ -258,7 +258,7 @@ class Sybl:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List]:
         if "record_id" in train.columns:
             # Take record ids from training set
-            train = train.drop(["record_id"], axis=1)
+            train.drop(["record_id"], axis=1, inplace=True)
             logger.debug("Training Data: %s", train.head())
 
             # Take record ids from predict set and store for later
