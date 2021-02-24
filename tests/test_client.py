@@ -220,8 +220,8 @@ def test_file_does_not_exist(sybl_instance):
         load_access_token(sybl_instance.email, sybl_instance.model_name)
 
 def test_remove_record_ids(sybl_instance):
-    train = pd.DataFrame([1, "Data1"],[2, "Data2"], columns =['record_id', 'col1'])
-    prediction = pd.DataFrame([3, "Data3"],[4, "Data4"], columns =['record_id', 'col1'])
+    train = pd.DataFrame({'record_id':[1,2],'col1':["Data1", "Data2"]})
+    prediction = pd.DataFrame({'record_id':[3,4],'col1':["Data3", "Data4"]})
     initial_pids = prediction[["record_id"]]
     train, prediction, predict_rids = sybl_instance._prepare_datasets(train, prediction)
 
