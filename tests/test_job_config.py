@@ -1,6 +1,10 @@
-import pytest
+"""
+Tests for the job config module
+"""
 
 from sybl.client import JobConfig
+
+# pylint: disable=missing-function-docstring
 
 
 def test_compare_accept():
