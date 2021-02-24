@@ -11,6 +11,9 @@ class JobConfig:
         self.max_timeout = timeout
 
     def compare(self, job_config: Dict) -> bool:
+        if "timeout" not in job_config and "prediction_type" not in job_config:
+            return False
+
         timeout: int = job_config["timeout"]
         prediction_type: str = job_config["prediction_type"].lower()
 
