@@ -185,14 +185,14 @@ class Sybl:
         if "record_id" in train_pd.columns:
             # Take record ids from training set
             train_pd = train_pd.drop(["record_id"], axis=1)
-            logger.debug("Training Data: {}".format(train_pd.head()))
+            logger.debug("Training Data: %s", train_pd.head())
 
             # Take record ids from predict set and store for later
             predict_rids = predict_pd[["record_id"]]
-            logger.debug("Predict Record IDs: {}".format(predict_rids.head()))
+            logger.debug("Predict Record IDs: %s", predict_rids.head())
 
             predict_pd = predict_pd.drop(["record_id"], axis=1)
-            logger.debug("Predict Data: {}".format(predict_pd.head()))
+            logger.debug("Predict Data: %s", predict_pd.head())
         else:
             raise AttributeError("Datasets must have record ids for each row")
 
