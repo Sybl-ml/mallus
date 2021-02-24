@@ -20,7 +20,7 @@ from sybl.authenticate import Authentication
 
 
 @pytest.fixture(scope="function")
-def sybl():
+def sybl_instance():
     sybl_instance = Sybl()
     sybl_instance._sock = Mock()
     sybl_instance.model_name = "Test Model"
