@@ -55,7 +55,6 @@ def valid_dataset():
 
 @pytest.fixture
 def predicted_dataset():
-
     return pd.DataFrame({"record_id": [4, 5, 6], "e": [5, 5, 5]})
 
 
