@@ -6,13 +6,14 @@ and correct responses to messages sent from the DCL
 import os
 import tempfile
 from unittest.mock import Mock
+import io  # type: ignore
 
+import pandas as pd  # type: ignore
 import pytest
-
 from mocket.mocket import mocketize  # type: ignore
 
 from sybl.client import Sybl
-from sybl.client.sybl_client import State, load_access_token
+from sybl.client.sybl_client import State, load_access_token, prepare_datasets
 from sybl.authenticate import Authentication
 
 # pylint: disable=protected-access
@@ -36,15 +37,41 @@ def valid_dataset():
 
     dataset = {
         "Dataset": {
-            "train": """record_id,a,b,c,d,e,f
-            0,1,2,3,4,5
-            0,1,2,3,4,5
-            0,1,2,3,4,5
+            "train": """record_id,a,b,c,d,e
+            1,1,2,3,4,5
+            2,1,2,3,4,5
+            3,1,2,3,4,5
             """,
-            "predict": """record_id,a,b,c,d,e,f
-            0,1,2,3,4,
-            0,1,2,3,4,
-            0,1,2,3,4,
+            "predict": """record_id,a,b,c,d,e
+            4,1,2,3,4,
+            5,1,2,3,4,
+            6,1,2,3,4,
+            """,
+        }
+    }
+
+    return dataset
+
+
+@pytest.fixture
+def predicted_dataset():
+    return pd.DataFrame({"record_id": [4, 5, 6], "e": [5, 5, 5]})
+
+
+@pytest.fixture
+def invalid_dataset():
+
+    dataset = {
+        "Dataset": {
+            "train": """a,b,c,d,e
+            1,1,2,3,4
+            2,1,2,3,4
+            3,1,2,3,4
+            """,
+            "predict": """a,b,c,d,e
+            4,1,2,3,
+            5,1,2,3,
+            6,1,2,3,
             """,
         }
     }
@@ -132,7 +159,7 @@ def test_reject_bad_config(sybl_instance):
         sybl_instance.load_config(bad_config)
 
 
-def test_heartbeat(sybl_instance):
+def test_message_control(sybl_instance):
 
     responses = [
         ({"Alive": ""}, State.HEARTBEAT),
@@ -143,7 +170,7 @@ def test_heartbeat(sybl_instance):
     for response in responses:
         sybl_instance._read_message = Mock(return_value=response[0])
 
-        sybl_instance._heartbeat()
+        sybl_instance._message_control()
         assert sybl_instance._state == response[1]
 
 
@@ -217,3 +244,40 @@ def test_file_does_not_exist(sybl_instance):
 
     with pytest.raises(FileNotFoundError):
         load_access_token(sybl_instance.email, sybl_instance.model_name)
+
+
+def test_prepare_dataset():
+
+    train = pd.DataFrame({"record_id": [1, 2], "col1": ["Data1", "Data2"]})
+    prediction = pd.DataFrame({"record_id": [3, 4], "col1": ["Data3", "Data4"]})
+    initial_pids = prediction["record_id"].tolist()
+    train, prediction, predict_rids = prepare_datasets(train, prediction)
+
+    assert ("record_id" not in list(train.columns)) and (
+        "record_id" not in list(prediction.columns)
+    )
+    assert predict_rids == initial_pids
+
+
+def test_process_job(sybl_instance, valid_dataset, predicted_dataset):
+
+    sybl_instance._state = State.PROCESSING
+    sybl_instance.callback = Mock(return_value=pd.DataFrame({"e": [5, 5, 5]}))
+
+    sybl_instance._message_stack.append(valid_dataset)
+    sybl_instance._process_job()
+
+    sybl_instance._send_message.assert_called_with(
+        {"Predictions": predicted_dataset.to_csv(index=False)}
+    )
+
+    assert sybl_instance._state == State.HEARTBEAT
+
+
+def test_bad_data_prepare_data(invalid_dataset):
+
+    train = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["train"]))
+    prediction = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["predict"]))
+
+    with pytest.raises(AttributeError):
+        prepare_datasets(train, prediction)

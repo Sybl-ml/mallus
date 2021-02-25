@@ -72,6 +72,29 @@ def load_access_token(email, model_name) -> Tuple[str, str]:
             raise ValueError(f"Model {model_name} not registered to {email}") from e
 
 
+def prepare_datasets(train, prediction) -> Tuple[pd.DataFrame, pd.DataFrame, List]:
+    """
+    Take in datasets to be used in computation and prepares them by removing
+    the record ids from each, saving and returning those from the prediction
+    set, as they are needed after prediction is done.
+    """
+    if "record_id" in train.columns:
+        # Take record ids from training set
+        train.drop(["record_id"], axis=1, inplace=True)
+        logger.debug("Training Data: %s", train.head())
+
+        # Take record ids from predict set and store for later
+        predict_rids = prediction["record_id"].tolist()
+        logger.debug("Predict Record IDs: %s", predict_rids[:5])
+
+        prediction = prediction.drop(["record_id"], axis=1)
+        logger.debug("Predict Data: %s", prediction.head())
+    else:
+        raise AttributeError("Datasets must have record ids for each row")
+
+    return (train, prediction, predict_rids)
+
+
 class Sybl:
     """ Main sybl class for a client to use to process data """
 
@@ -147,12 +170,15 @@ class Sybl:
         # Check the message for authentication successfull
 
         while True:
-            while self._state == State.HEARTBEAT:
-                self._heartbeat()
 
+            # Keep looping while heartbeating
+            while self._state == State.HEARTBEAT:
+                self._message_control()
+
+            # If it is a job config, evaluate it
             if self._state == State.READ_JOB:
                 self._process_job_config()
-
+            # Otherwise it is data, which should be used in callback
             elif self._state == State.PROCESSING:
                 self._process_job()
 
@@ -212,50 +238,43 @@ class Sybl:
     def _process_job(self) -> None:
         logger.info("PROCCESSING JOB")
 
+        # Get message from message stack
         if self._message_stack:
             data: Dict = self._message_stack.pop()
 
+        # Make sure the dataset ia actually there
         assert "Dataset" in data
 
+        # Get training and prediction datasets
         train = data["Dataset"]["train"]
         predict = data["Dataset"]["predict"]
 
         train_pd = pd.read_csv(io.StringIO(train))
         predict_pd = pd.read_csv(io.StringIO(predict))
 
-        predict_rids = None
-
-        if "record_id" in train_pd.columns:
-            # Take record ids from training set
-            train_pd = train_pd.drop(["record_id"], axis=1)
-            logger.debug("Training Data: %s", train_pd.head())
-
-            # Take record ids from predict set and store for later
-            predict_rids = predict_pd[["record_id"]]
-            logger.debug("Predict Record IDs: %s", predict_rids.head())
-
-            predict_pd = predict_pd.drop(["record_id"], axis=1)
-            logger.debug("Predict Data: %s", predict_pd.head())
-        else:
-            raise AttributeError("Datasets must have record ids for each row")
+        # Prepare the datasets for callback
+        train_pd, predict_pd, predict_rids = prepare_datasets(train_pd, predict_pd)
 
         # Check the user has specified a callback here to satisfy mypy
         assert self.callback is not None
 
         predictions = self.callback(train_pd, predict_pd)
 
+        logger.debug("Predictions: %s", predictions.head())
+
         # Attatch record ids onto predictions
-        if predict_rids is not None:
-            predictions["record_id"] = predict_rids
-            cols = predictions.columns.tolist()
-            cols = cols[-1:] + cols[:-1]
-            predictions = predictions[cols]
+        predictions["record_id"] = predict_rids
+        cols = predictions.columns.tolist()
+        cols.insert(0, cols.pop())
+        predictions = predictions[cols]
+
+        assert len(predictions.index) == len(predict_pd.index)
 
         message = {"Predictions": predictions.to_csv(index=False)}
         self._send_message(message)
         self._state = State.HEARTBEAT
 
-    def _heartbeat(self) -> None:
+    def _message_control(self) -> None:
 
         response: Dict = self._read_message()
 

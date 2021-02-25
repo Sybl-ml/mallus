@@ -7,3 +7,4 @@ pyOpenSSL==20.0.0
 pytest==6.2.1
 python-dotenv==0.15.0
 xdg==5.0.1
+numpy==1.20.1
