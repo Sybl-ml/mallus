@@ -9,10 +9,7 @@ from unittest.mock import Mock
 import io  # type: ignore
 
 import pandas as pd  # type: ignore
-import numpy as np  # type: ignore
-
 import pytest
-
 from mocket.mocket import mocketize  # type: ignore
 
 from sybl.client import Sybl
@@ -54,6 +51,11 @@ def valid_dataset():
     }
 
     return dataset
+
+
+@pytest.fixture
+def predicted_dataset():
+    return pd.DataFrame({"record_id": [4, 5, 6], "e": [5, 5, 5]})
 
 
 @pytest.fixture
@@ -244,7 +246,7 @@ def test_file_does_not_exist(sybl_instance):
         load_access_token(sybl_instance.email, sybl_instance.model_name)
 
 
-def test_prepare_dataset(sybl_instance):
+def test_prepare_dataset():
 
     train = pd.DataFrame({"record_id": [1, 2], "col1": ["Data1", "Data2"]})
     prediction = pd.DataFrame({"record_id": [3, 4], "col1": ["Data3", "Data4"]})
@@ -257,40 +259,22 @@ def test_prepare_dataset(sybl_instance):
     assert predict_rids == initial_pids
 
 
-def test_process_job(sybl_instance, valid_dataset):
+def test_process_job(sybl_instance, valid_dataset, predicted_dataset):
 
-    sybl_instance._state == State.PROCESSING
-
-    train = pd.read_csv(io.StringIO(valid_dataset["Dataset"]["train"]))
-    predict = pd.read_csv(io.StringIO(valid_dataset["Dataset"]["predict"]))
-    predictions = pd.DataFrame(
-        {
-            predict.columns[-1]: np.repeat(
-                [train[train.columns[-1]].iloc[0]], len(predict.index)
-            )
-        }
-    )
-
-    sybl_instance.callback = Mock(return_value=predictions)
-
-    predictions["record_id"] = predict["record_id"]
+    sybl_instance._state = State.PROCESSING
+    sybl_instance.callback = Mock(return_value=pd.DataFrame({"e": [5, 5, 5]}))
 
     sybl_instance._message_stack.append(valid_dataset)
     sybl_instance._process_job()
 
-    assert sybl_instance._send_message.called
-
-    cols = predictions.columns.tolist()
-    predictions = predictions[cols[-1:] + cols[:-1]]
-
     sybl_instance._send_message.assert_called_with(
-        {"Predictions": predictions.to_csv(index=False)}
+        {"Predictions": predicted_dataset.to_csv(index=False)}
     )
 
     assert sybl_instance._state == State.HEARTBEAT
 
 
-def test_bad_data_prepare_data(sybl_instance, invalid_dataset):
+def test_bad_data_prepare_data(invalid_dataset):
 
     train = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["train"]))
     prediction = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["predict"]))

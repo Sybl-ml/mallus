@@ -265,7 +265,7 @@ class Sybl:
         # Attatch record ids onto predictions
         predictions["record_id"] = predict_rids
         cols = predictions.columns.tolist()
-        cols = cols[-1:] + cols[:-1]
+        cols.insert(0, cols.pop())
         predictions = predictions[cols]
 
         assert len(predictions.index) == len(predict_pd.index)
