@@ -13,6 +13,8 @@ import pandas as pd  # type: ignore
 
 from xdg import xdg_data_home
 
+from .job_config import JobConfig
+
 # This is a bug in Pylint: https://github.com/PyCQA/pylint/issues/3882
 # pylint: disable=unsubscriptable-object
 
@@ -37,6 +39,62 @@ class State(Enum):
     PROCESSING: int = auto()
 
 
+def load_access_token(email, model_name) -> Tuple[str, str]:
+    """
+    Loads the access token from XDG_DATA_HOME using email and model name
+
+        Parameters:
+            email (str): The email the model is registered with
+            model_name (str): The name of the model to be loaded
+
+        Returns:
+            Tuple[str, str]: Tuple of access token and model id
+        Raise:
+            ValueError: raised if the model name and email pair is not found
+                in XDG_DATA_HOME
+            FileNotFoundError: raised if XDG_DATA_HOME/sybl.json is not found
+                meaning no access token has been stored
+    """
+    model_key: str = f"{email}.{model_name}"
+
+    path = xdg_data_home() / "sybl.json"
+    with path.open("r") as f:  # pylint: disable=invalid-name
+
+        file_contents: str = f.read()
+        models_dict: Dict = json.loads(file_contents)
+
+        try:
+            model_data = models_dict[model_key]
+
+            return model_data["access_token"], model_data["model_id"]
+        except KeyError as e:  # pylint: disable=invalid-name
+            logger.error("Model not registered")
+            raise ValueError(f"Model {model_name} not registered to {email}") from e
+
+
+def prepare_datasets(train, prediction) -> Tuple[pd.DataFrame, pd.DataFrame, List]:
+    """
+    Take in datasets to be used in computation and prepares them by removing
+    the record ids from each, saving and returning those from the prediction
+    set, as they are needed after prediction is done.
+    """
+    if "record_id" in train.columns:
+        # Take record ids from training set
+        train.drop(["record_id"], axis=1, inplace=True)
+        logger.debug("Training Data: %s", train.head())
+
+        # Take record ids from predict set and store for later
+        predict_rids = prediction["record_id"].tolist()
+        logger.debug("Predict Record IDs: %s", predict_rids[:5])
+
+        prediction = prediction.drop(["record_id"], axis=1)
+        logger.debug("Predict Data: %s", prediction.head())
+    else:
+        raise AttributeError("Datasets must have record ids for each row")
+
+    return (train, prediction, predict_rids)
+
+
 class Sybl:
     """ Main sybl class for a client to use to process data """
 
@@ -53,7 +111,7 @@ class Sybl:
         self._state: State = State.AUTHENTICATING
 
         self.callback: Optional[Callable] = None
-        self.config: bool = False
+        self.config: JobConfig = JobConfig()
 
         self._message_stack: List[Dict] = []
 
@@ -92,26 +150,36 @@ class Sybl:
 
         """
         # Check the user has specified a callback here
-        assert self.callback is not None
-
-        self._sock.connect((SYBL_IP, DCL_SOCKET))
-        logger.info("Connected")
+        if self.callback is None:
+            raise AttributeError("Callback has not been registered")
 
         if not self._access_token or not self._model_id:
             logger.error("Model has not been loaded")
             raise AttributeError("Model access token and ID have not been loaded")
 
+        self._sock.connect((SYBL_IP, DCL_SOCKET))
+        logger.info("Connected")
+
         if not self._is_authenticated():
             raise PermissionError("Model access token has not been authenticated")
 
-        # Check the message for authentication successfull
         self._state = State.HEARTBEAT
+        self._begin_state_machine()
+
+    def _begin_state_machine(self):
+        # Check the message for authentication successfull
 
         while True:
-            while self._state == State.HEARTBEAT:
-                self._heartbeat()
 
-            if self._process_job_config():
+            # Keep looping while heartbeating
+            while self._state == State.HEARTBEAT:
+                self._message_control()
+
+            # If it is a job config, evaluate it
+            if self._state == State.READ_JOB:
+                self._process_job_config()
+            # Otherwise it is data, which should be used in callback
+            elif self._state == State.PROCESSING:
                 self._process_job()
 
     def _is_authenticated(self) -> bool:
@@ -125,13 +193,16 @@ class Sybl:
 
         self._send_message(response)
         message = self._read_message()
-        if message["message"] != "Authentication successful":
-            logger.error("Authentication not successful")
-            return False
+        try:
+            if message["message"] == "Authentication successful":
+                logger.error("Authentication not successful")
+                return True
+        except KeyError:
+            pass
 
-        return True
+        return False
 
-    def load_config(self) -> None:
+    def load_config(self, config: JobConfig) -> None:
         """
         Load the clients job config
 
@@ -141,7 +212,10 @@ class Sybl:
             Returns:
                 None
         """
-        return
+        if isinstance(config, JobConfig):
+            self.config = config
+        else:
+            raise AttributeError("Config must be valid JobConfig")
 
     def load_model(self, email: str, model_name: str) -> None:
         """
@@ -156,56 +230,51 @@ class Sybl:
                 None
         """
 
-        self._access_token, self._model_id = self._load_access_token(email, model_name)
+        self._access_token, self._model_id = load_access_token(email, model_name)
 
         self.email = email
         self.model_name = model_name
 
     def _process_job(self) -> None:
         logger.info("PROCCESSING JOB")
-        while self._state == State.PROCESSING:
 
-            data: Dict = self._read_message()
+        # Get message from message stack
+        if self._message_stack:
+            data: Dict = self._message_stack.pop()
 
-            train = data["Dataset"]["train"]
-            predict = data["Dataset"]["predict"]
+        # Make sure the dataset ia actually there
+        assert "Dataset" in data
 
-            train_pd = pd.read_csv(io.StringIO(train))
-            predict_pd = pd.read_csv(io.StringIO(predict))
+        # Get training and prediction datasets
+        train = data["Dataset"]["train"]
+        predict = data["Dataset"]["predict"]
 
-            predict_rids = None
+        train_pd = pd.read_csv(io.StringIO(train))
+        predict_pd = pd.read_csv(io.StringIO(predict))
 
-            if "record_id" in train_pd.columns:
-                # Take record ids from training set
-                train_pd = train_pd.drop(["record_id"], axis=1)
-                print("Training Data: {}".format(train_pd))
+        # Prepare the datasets for callback
+        train_pd, predict_pd, predict_rids = prepare_datasets(train_pd, predict_pd)
 
-                # Take record ids from predict set and store for later
-                predict_rids = predict_pd[["record_id"]]
-                print("Predict Record IDs: {}".format(predict_rids))
+        # Check the user has specified a callback here to satisfy mypy
+        assert self.callback is not None
 
-                predict_pd = predict_pd.drop(["record_id"], axis=1)
-                print("Predict Data: {}".format(predict_pd))
-            else:
-                raise AttributeError("Datasets must have record ids for each row")
+        predictions = self.callback(train_pd, predict_pd)
 
-            # Check the user has specified a callback here to satisfy mypy
-            assert self.callback is not None
+        logger.debug("Predictions: %s", predictions.head())
 
-            predictions = self.callback(train_pd, predict_pd)
+        # Attatch record ids onto predictions
+        predictions["record_id"] = predict_rids
+        cols = predictions.columns.tolist()
+        cols.insert(0, cols.pop())
+        predictions = predictions[cols]
 
-            # Attatch record ids onto predictions
-            if predict_rids is not None:
-                predictions["record_id"] = predict_rids
-                cols = predictions.columns.tolist()
-                cols = cols[-1:] + cols[:-1]
-                predictions = predictions[cols]
+        assert len(predictions.index) == len(predict_pd.index)
 
-            message = {"Predictions": predictions.to_csv(index=False)}
-            self._send_message(message)
-            self._state = State.HEARTBEAT
+        message = {"Predictions": predictions.to_csv(index=False)}
+        self._send_message(message)
+        self._state = State.HEARTBEAT
 
-    def _heartbeat(self) -> None:
+    def _message_control(self) -> None:
 
         response: Dict = self._read_message()
 
@@ -213,48 +282,41 @@ class Sybl:
 
         if "Alive" in response.keys():
             # Write it back
+            self._state = State.HEARTBEAT
             self._send_message(response)
         elif "JobConfig" in response.keys():
             logger.info("RECIEVED JOB CONFIG")
             self._state = State.READ_JOB
             self._message_stack.append(response)
-
-    def _process_job_config(self) -> bool:
-        while self._state == State.READ_JOB:
-
-            if self._message_stack:
-                job_config = self._message_stack.pop()
-
-            self._send_message({"response": "sure"})
-
+        elif "Dataset" in response.keys():
+            logger.info("RECIEVED DATASET")
             self._state = State.PROCESSING
+            self._message_stack.append(response)
+
+    def _process_job_config(self) -> None:
+        if self._message_stack:
+            job_config = self._message_stack.pop()
+        else:
+            logger.error("Empty Message Stack!\n RETURNING TO HEARTBEAT")
+            self._state = State.HEARTBEAT
+            return
+
+        assert self.config is not None
+        if "JobConfig" not in job_config:
+            logger.warning("Invalid Job Config Message")
+            self._state = State.HEARTBEAT
+            return
+
+        accept_job: bool = self.config.compare(job_config["JobConfig"])
+
+        if not accept_job:
+            self._send_message({"ConfigResponse": {"accept": False}})
+            logger.info("REJECTING JOB")
+        else:
+            self._send_message({"ConfigResponse": {"accept": True}})
             logger.info("ACCEPTING JOB")
 
-        return True
-
-    def _load_access_token(self, email, model_name) -> Tuple[str, str]:
-
-        model_key: str = f"{email}.{model_name}"
-
-        if self.config:
-            logger.error("Config options not implemented")
-            raise ValueError("Config options not yet implemented")
-
-        path = xdg_data_home() / "sybl.json"
-        with path.open("r") as f:  # pylint: disable=invalid-name
-
-            file_contents: str = f.read()
-            models_dict: Dict = json.loads(file_contents)
-
-            try:
-                model_data = models_dict[model_key]
-
-                return model_data["access_token"], model_data["model_id"]
-            except ValueError as e:  # pylint: disable=invalid-name
-                logger.error("Model not registered")
-                raise ValueError(
-                    f"Model {self.model_name} not registered to {self.email}"
-                ) from e
+        self._state = State.HEARTBEAT
 
     def _read_message(self) -> Dict:
         size_bytes = self._sock.recv(4)
@@ -274,8 +336,9 @@ class Sybl:
                 remaining_size -= 4096
 
             return json.loads(bytes(buf))
-
-        return json.loads(self._sock.recv(size))
+        message: Dict = json.loads(self._sock.recv(size))
+        logger.info(message)
+        return message
 
     def _send_message(self, message: Union[Dict, str]):
         data = json.dumps(message) if isinstance(message, dict) else message

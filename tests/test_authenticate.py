@@ -14,7 +14,7 @@ import pytest
 
 from mocket.mocket import mocketize  # type: ignore
 
-from authenticate import Authentication, parse_message
+from sybl.authenticate import Authentication, parse_message
 
 
 @mocketize

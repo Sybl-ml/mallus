@@ -5,6 +5,7 @@ An example for users connecting to the Sybl service and waiting for data.
 import pandas as pd  # type: ignore
 
 from sybl.client import Sybl
+from sybl.client import JobConfig
 import pandas as pd
 
 sybl = Sybl()
