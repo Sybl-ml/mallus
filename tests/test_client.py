@@ -281,8 +281,7 @@ def test_process_job(sybl_instance, valid_dataset):
     assert sybl_instance._send_message.called
 
     cols = predictions.columns.tolist()
-    cols = cols[-1:] + cols[:-1]
-    predictions = predictions[cols]
+    predictions = predictions[cols[-1:] + cols[:-1]]
 
     sybl_instance._send_message.assert_called_with(
         {"Predictions": predictions.to_csv(index=False)}
