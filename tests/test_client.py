@@ -9,10 +9,7 @@ from unittest.mock import Mock
 import io  # type: ignore
 
 import pandas as pd  # type: ignore
-import numpy as np  # type: ignore
-
 import pytest
-
 from mocket.mocket import mocketize  # type: ignore
 
 from sybl.client import Sybl
@@ -250,7 +247,7 @@ def test_file_does_not_exist(sybl_instance):
         load_access_token(sybl_instance.email, sybl_instance.model_name)
 
 
-def test_prepare_dataset(sybl_instance):
+def test_prepare_dataset():
 
     train = pd.DataFrame({"record_id": [1, 2], "col1": ["Data1", "Data2"]})
     prediction = pd.DataFrame({"record_id": [3, 4], "col1": ["Data3", "Data4"]})
@@ -278,7 +275,7 @@ def test_process_job(sybl_instance, valid_dataset, predicted_dataset):
     assert sybl_instance._state == State.HEARTBEAT
 
 
-def test_bad_data_prepare_data(sybl_instance, invalid_dataset):
+def test_bad_data_prepare_data(invalid_dataset):
 
     train = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["train"]))
     prediction = pd.read_csv(io.StringIO(invalid_dataset["Dataset"]["predict"]))
