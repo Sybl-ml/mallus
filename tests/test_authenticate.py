@@ -6,18 +6,26 @@ ensuring proper handling of `sybl.json`.
 # Tests probably don't need a docstring
 # pylint: disable=missing-function-docstring
 
+# pylint: disable=redefined-outer-name
+
 import os
 import shutil
 import tempfile
 
 import pytest
 
-from mocket.mocket import mocketize  # type: ignore
-
 from sybl.authenticate import Authentication, parse_message
 
 
-@mocketize
+@pytest.fixture
+def authentication_instance():
+    instance = Authentication("email", "password", "model_name")
+    instance.access_token = ""
+    instance.model_id = 2344423
+
+    return instance
+
+
 def test_messages_are_parsed_correctly():
     message = {"variant": {"key": "value"}}
     variant, data = parse_message(message)
@@ -26,7 +34,6 @@ def test_messages_are_parsed_correctly():
     assert data == {"key": "value"}
 
 
-@mocketize
 def test_invalid_messages_fail_to_parse():
     message = {"variant": {"key": "value"}, "another": "value"}
 
@@ -34,7 +41,6 @@ def test_invalid_messages_fail_to_parse():
         parse_message(message)
 
 
-@mocketize
 def test_empty_messages_fail_to_parse():
     message = {}
 
@@ -42,34 +48,24 @@ def test_empty_messages_fail_to_parse():
         parse_message(message)
 
 
-@mocketize
-def test_authentication_creates_sybl_json():
+def test_authentication_creates_sybl_json(authentication_instance):
     # Set the environment variable to a temporary directory
     with tempfile.TemporaryDirectory() as directory:
         os.environ["XDG_DATA_HOME"] = directory
 
-        instance = Authentication("email", "model_name")
-        instance.access_token = ""
-        instance.model_id = 2344423
-
-        instance.save_access_tokens()
+        authentication_instance.save_access_tokens()
 
         expected_path = os.path.join(directory, "sybl.json")
         assert os.path.isfile(expected_path)
 
 
-@mocketize
-def test_authentication_creates_xdg_data_home():
+def test_authentication_creates_xdg_data_home(authentication_instance):
     # Set the environment variable to a temporary directory and delete it
     with tempfile.TemporaryDirectory() as directory:
         os.environ["XDG_DATA_HOME"] = directory
         shutil.rmtree(directory)
 
-        instance = Authentication("email", "model_name")
-        instance.access_token = ""
-        instance.model_id = 2344423
-
-        instance.save_access_tokens()
+        authentication_instance.save_access_tokens()
 
         # Check that the directory exists
         assert os.path.isdir(directory)
