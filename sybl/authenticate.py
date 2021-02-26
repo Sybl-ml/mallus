@@ -15,6 +15,7 @@ import json
 import os
 import base64
 import struct
+import getpass
 
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple, Union
@@ -80,15 +81,20 @@ class Authentication:
     `sybl.json` for them.
     """
 
-    def __init__(self, email: str, model_name: str):
-        self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.stream.connect(("127.0.0.1", DCL_SOCKET))
-
+    def __init__(self, email: str, password: str, model_name: str):
         self.email: str = email
+        self.password: str = password
         self.model_name: str = model_name
 
         self.access_token: Optional[str] = None
         self.model_id: Optional[str] = None
+        self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def _connect(self):
+        """
+        Connects to the DCL for communications.
+        """
+        self.stream.connect(("127.0.0.1", DCL_SOCKET))
 
     def authenticate_challenge(self, message: Dict[Any, Any]):
         """
@@ -160,7 +166,16 @@ class Authentication:
 
         """
 
-        message = {"NewModel": {"email": self.email, "model_name": self.model_name}}
+        # Connect to the socket
+        self._connect()
+
+        message = {
+            "NewModel": {
+                "email": self.email,
+                "password": self.password,
+                "model_name": self.model_name,
+            }
+        }
         self._send_message(message)
 
         while True:
@@ -269,10 +284,11 @@ def main():
     """
 
     email: str = input("Enter email: ")
+    password: str = getpass.getpass()
     name: str = input("Enter name of model: ")
     print("Authenticating...")
 
-    verifier = Authentication(email, name)
+    verifier = Authentication(email, password, name)
 
     verifier.verify()
 
