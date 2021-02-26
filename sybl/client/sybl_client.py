@@ -195,11 +195,11 @@ class Sybl:
         message = self._read_message()
         try:
             if message["message"] == "Authentication successful":
-                logger.error("Authentication not successful")
                 return True
         except KeyError:
             pass
 
+        logger.error("Authentication not successful")
         return False
 
     def load_config(self, config: JobConfig) -> None:
