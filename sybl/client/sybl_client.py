@@ -112,6 +112,7 @@ class Sybl:
 
         self.callback: Optional[Callable] = None
         self.config: JobConfig = JobConfig()
+        self.recv_job_config = None
 
         self._message_stack: List[Dict] = []
 
@@ -258,7 +259,7 @@ class Sybl:
         # Check the user has specified a callback here to satisfy mypy
         assert self.callback is not None
 
-        predictions = self.callback(train_pd, predict_pd)
+        predictions = self.callback(train_pd, predict_pd, self.recv_job_config)
 
         logger.debug("Predictions: %s", predictions.head())
 
@@ -314,6 +315,7 @@ class Sybl:
             logger.info("REJECTING JOB")
         else:
             self._send_message({"ConfigResponse": {"accept": True}})
+            self.recv_job_config = job_config
             logger.info("ACCEPTING JOB")
 
         self._state = State.HEARTBEAT
