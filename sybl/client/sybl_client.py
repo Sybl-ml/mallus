@@ -112,7 +112,7 @@ class Sybl:
 
         self.callback: Optional[Callable] = None
         self.config: JobConfig = JobConfig()
-        self.recv_job_config = None
+        self.recv_job_config: Optional[Dict] = None
 
         self._message_stack: List[Dict] = []
 
