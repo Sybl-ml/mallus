@@ -33,6 +33,9 @@ class JobConfig:
         Args:
             comparison_function: The function to use for comparing
         """
+        if not callable(comparison_function):
+            raise TypeError("The provided comparison function is not callable")
+
         self.comparison_function = comparison_function
 
     def compare(self, job_config: Dict) -> bool:
