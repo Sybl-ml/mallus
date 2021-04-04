@@ -1,6 +1,8 @@
 """ JobConfig Module """
 
-from typing import Dict, List
+from typing import Callable, Dict, Optional, List
+
+ComparisonFunction = Callable[[Dict], bool]
 
 
 class JobConfig:
@@ -17,6 +19,21 @@ class JobConfig:
     ):
         self.prediction_types = prediction_types
         self.max_timeout = timeout
+        self.comparison_function: Optional[ComparisonFunction] = None
+
+    def set_comparison_function(self, comparison_function: ComparisonFunction):
+        """
+        Sets the comparison function to use with incoming job configurations.
+
+        This allows more fine-grained control over the process. By default, we
+        just check that the user's timeout is long enough and that they are
+        willing to perform the job type. By providing a comparison function,
+        they will be able to check other more complex aspects.
+
+        Args:
+            comparison_function: The function to use for comparing
+        """
+        self.comparison_function = comparison_function
 
     def compare(self, job_config: Dict) -> bool:
         """
@@ -29,10 +46,30 @@ class JobConfig:
             Returns:
                 bool: True if job is accepted, False otherwise. False if the job_config is malformed
         """
-        if "timeout" not in job_config and "prediction_type" not in job_config:
+        # Ensure the config is not malformed
+        expected_fields = [
+            "message_creation_timestamp",
+            "prediction_cutoff_timestamp",
+            "prediction_type",
+        ]
+
+        if not all(field in job_config for field in expected_fields):
             return False
 
-        timeout: int = job_config["timeout"]
+        # If the user has defined a comparison function, use that
+        if self.comparison_function is not None:
+            return self.comparison_function(job_config)
+
+        # Otherwise, do some basic checks for them
+        message_creation_timestamp: int = job_config["message_creation_timestamp"]
+        prediction_cutoff_timestamp: int = job_config["prediction_cutoff_timestamp"]
         prediction_type: str = job_config["prediction_type"].lower()
 
-        return timeout < self.max_timeout and prediction_type in self.prediction_types
+        # Calculate the time limit for the job
+        time_difference: int = prediction_cutoff_timestamp - message_creation_timestamp
+
+        # Multiply our timeout by 60 to convert from minutes to seconds
+        return (
+            time_difference <= self.max_timeout * 60
+            and prediction_type in self.prediction_types
+        )
