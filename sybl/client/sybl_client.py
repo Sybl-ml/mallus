@@ -315,7 +315,7 @@ class Sybl:
             logger.info("REJECTING JOB")
         else:
             self._send_message({"ConfigResponse": {"accept": True}})
-            self.recv_job_config = job_config
+            self.recv_job_config = job_config["JobConfig"]
             logger.info("ACCEPTING JOB")
 
         self._state = State.HEARTBEAT
