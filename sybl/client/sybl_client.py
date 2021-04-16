@@ -4,6 +4,8 @@ import socket
 import json
 import struct
 import io
+import base64
+import bz2
 
 from enum import Enum, auto
 from socket import socket as Socket
@@ -86,6 +88,32 @@ def prepare_datasets(train, prediction) -> Tuple[pd.DataFrame, pd.DataFrame, Lis
         raise AttributeError("Datasets must have record ids for each row")
 
     return (train, prediction, predict_rids)
+
+
+def decode_and_decompress(data: str) -> str:
+    """
+    Decodes the data using Base64 and decompresses it using `bzip2`.
+
+    Args:
+        data: The raw string to decode and decompress
+
+    Returns: The decoded and decompressed string
+    """
+    decoded = base64.b64decode(data.encode())
+    return bz2.decompress(decoded).decode()
+
+
+def compress_and_encode(data: str) -> str:
+    """
+    Compresses the data using `bzip2` and encodes it using Base64.
+
+    Args:
+        data: The raw string to compress and encode
+
+    Returns: A Base64 encoded version of the compressed data
+    """
+    compressed = bz2.compress(data.encode())
+    return base64.b64encode(compressed).decode()
 
 
 class Sybl:
@@ -233,15 +261,14 @@ class Sybl:
         log.info("PROCCESSING JOB")
 
         # Get message from message stack
-        if self._message_stack:
-            data: Dict = self._message_stack.pop()
+        data: Dict = self._message_stack.pop()
 
         # Make sure the dataset ia actually there
         assert "Dataset" in data
 
         # Get training and prediction datasets
-        train = data["Dataset"]["train"]
-        predict = data["Dataset"]["predict"]
+        train = decode_and_decompress(data["Dataset"]["train"])
+        predict = decode_and_decompress(data["Dataset"]["predict"])
 
         train_pd = pd.read_csv(io.StringIO(train))
         predict_pd = pd.read_csv(io.StringIO(predict))
@@ -264,7 +291,11 @@ class Sybl:
 
         assert len(predictions.index) == len(predict_pd.index)
 
-        message = {"Predictions": predictions.to_csv(index=False)}
+        compressed_predictions: str = compress_and_encode(
+            predictions.to_csv(index=False)
+        )
+
+        message = {"Predictions": compressed_predictions}
         self._send_message(message)
         self._state = State.HEARTBEAT
 
