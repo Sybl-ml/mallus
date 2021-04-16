@@ -1,8 +1,8 @@
 """ Module for client registration """
+
 import socket
 import json
 import struct
-import logging
 import io
 
 from enum import Enum, auto
@@ -12,6 +12,7 @@ from typing import Callable, Optional, Dict, Tuple, List, Union
 import pandas as pd  # type: ignore
 
 from xdg import xdg_data_home
+from zenlog import log  # type: ignore
 
 from .job_config import JobConfig
 
@@ -20,14 +21,6 @@ from .job_config import JobConfig
 
 SYBL_IP: str = "127.0.0.1"
 DCL_SOCKET: int = 7000
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-ch = logging.StreamHandler()
-formatter = logging.Formatter("%(levelname)s:%(module)s %(message)s")
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 
 
 class State(Enum):
@@ -68,7 +61,7 @@ def load_access_token(email, model_name) -> Tuple[str, str]:
 
             return model_data["access_token"], model_data["model_id"]
         except KeyError as e:  # pylint: disable=invalid-name
-            logger.error("Model not registered")
+            log.error("Model not registered")
             raise ValueError(f"Model {model_name} not registered to {email}") from e
 
 
@@ -81,14 +74,14 @@ def prepare_datasets(train, prediction) -> Tuple[pd.DataFrame, pd.DataFrame, Lis
     if "record_id" in train.columns:
         # Take record ids from training set
         train.drop(["record_id"], axis=1, inplace=True)
-        logger.debug("Training Data: %s", train.head())
+        log.debug("Training Data: %s", train.head())
 
         # Take record ids from predict set and store for later
         predict_rids = prediction["record_id"].tolist()
-        logger.debug("Predict Record IDs: %s", predict_rids[:5])
+        log.debug("Predict Record IDs: %s", predict_rids[:5])
 
         prediction = prediction.drop(["record_id"], axis=1)
-        logger.debug("Predict Data: %s", prediction.head())
+        log.debug("Predict Data: %s", prediction.head())
     else:
         raise AttributeError("Datasets must have record ids for each row")
 
@@ -155,11 +148,11 @@ class Sybl:
             raise AttributeError("Callback has not been registered")
 
         if not self._access_token or not self._model_id:
-            logger.error("Model has not been loaded")
+            log.error("Model has not been loaded")
             raise AttributeError("Model access token and ID have not been loaded")
 
         self._sock.connect((SYBL_IP, DCL_SOCKET))
-        logger.info("Connected")
+        log.info("Connected")
 
         if not self._is_authenticated():
             raise PermissionError("Model access token has not been authenticated")
@@ -200,7 +193,7 @@ class Sybl:
         except KeyError:
             pass
 
-        logger.error("Authentication not successful")
+        log.error("Authentication not successful")
         return False
 
     def load_config(self, config: JobConfig) -> None:
@@ -237,7 +230,7 @@ class Sybl:
         self.model_name = model_name
 
     def _process_job(self) -> None:
-        logger.info("PROCCESSING JOB")
+        log.info("PROCCESSING JOB")
 
         # Get message from message stack
         if self._message_stack:
@@ -261,7 +254,7 @@ class Sybl:
 
         predictions = self.callback(train_pd, predict_pd, self.recv_job_config)
 
-        logger.debug("Predictions: %s", predictions.head())
+        log.debug("Predictions: %s", predictions.head())
 
         # Attatch record ids onto predictions
         predictions["record_id"] = predict_rids
@@ -279,18 +272,18 @@ class Sybl:
 
         response: Dict = self._read_message()
 
-        logger.debug("HEARTBEAT")
+        log.debug("HEARTBEAT")
 
         if "Alive" in response.keys():
             # Write it back
             self._state = State.HEARTBEAT
             self._send_message(response)
         elif "JobConfig" in response.keys():
-            logger.info("RECIEVED JOB CONFIG")
+            log.info("RECIEVED JOB CONFIG")
             self._state = State.READ_JOB
             self._message_stack.append(response)
         elif "Dataset" in response.keys():
-            logger.info("RECIEVED DATASET")
+            log.info("RECIEVED DATASET")
             self._state = State.PROCESSING
             self._message_stack.append(response)
 
@@ -298,13 +291,13 @@ class Sybl:
         if self._message_stack:
             job_config = self._message_stack.pop()
         else:
-            logger.error("Empty Message Stack!\n RETURNING TO HEARTBEAT")
+            log.error("Empty Message Stack!\n RETURNING TO HEARTBEAT")
             self._state = State.HEARTBEAT
             return
 
         assert self.config is not None
         if "JobConfig" not in job_config:
-            logger.warning("Invalid Job Config Message")
+            log.warning("Invalid Job Config Message")
             self._state = State.HEARTBEAT
             return
 
@@ -312,11 +305,11 @@ class Sybl:
 
         if not accept_job:
             self._send_message({"ConfigResponse": {"accept": False}})
-            logger.info("REJECTING JOB")
+            log.info("REJECTING JOB")
         else:
             self._send_message({"ConfigResponse": {"accept": True}})
             self.recv_job_config = job_config["JobConfig"]
-            logger.info("ACCEPTING JOB")
+            log.info("ACCEPTING JOB")
 
         self._state = State.HEARTBEAT
 
@@ -325,7 +318,7 @@ class Sybl:
         # print("size_bytes: {}".format(size_bytes))
 
         size = struct.unpack(">I", size_bytes)[0]
-        logger.debug("Message size: %d", size)
+        log.debug("Message size: %d", size)
 
         if size > 4096:
             remaining_size = size
@@ -338,8 +331,9 @@ class Sybl:
                 remaining_size -= 4096
 
             return json.loads(bytes(buf))
+
         message: Dict = json.loads(self._sock.recv(size))
-        logger.info(message)
+        log.info(message)
         return message
 
     def _send_message(self, message: Union[Dict, str]):
