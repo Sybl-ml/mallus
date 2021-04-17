@@ -4,16 +4,26 @@ and correct responses to messages sent from the DCL
 """
 
 import os
-import tempfile
-from unittest.mock import Mock
 import io  # type: ignore
+import bz2
+import json
+import base64
+import tempfile
+
+from unittest.mock import Mock
 
 import pandas as pd  # type: ignore
 import pytest
 from mocket.mocket import mocketize  # type: ignore
 
 from sybl.client import Sybl
-from sybl.client.sybl_client import State, load_access_token, prepare_datasets
+from sybl.client.sybl_client import (
+    State,
+    load_access_token,
+    prepare_datasets,
+    compress_and_encode,
+    decode_and_decompress,
+)
 from sybl.authenticate import Authentication
 
 # pylint: disable=protected-access
@@ -35,22 +45,24 @@ def sybl_instance():
 @pytest.fixture
 def valid_dataset():
 
-    dataset = {
+    return {
         "Dataset": {
-            "train": """record_id,a,b,c,d,e
+            "train": compress_and_encode(
+                """record_id,a,b,c,d,e
             1,1,2,3,4,5
             2,1,2,3,4,5
             3,1,2,3,4,5
-            """,
-            "predict": """record_id,a,b,c,d,e
+            """
+            ),
+            "predict": compress_and_encode(
+                """record_id,a,b,c,d,e
             4,1,2,3,4,
             5,1,2,3,4,
             6,1,2,3,4,
-            """,
+            """
+            ),
         }
     }
-
-    return dataset
 
 
 @pytest.fixture
@@ -267,9 +279,12 @@ def test_process_job(sybl_instance, valid_dataset, predicted_dataset):
     sybl_instance._message_stack.append(valid_dataset)
     sybl_instance._process_job()
 
-    sybl_instance._send_message.assert_called_with(
-        {"Predictions": predicted_dataset.to_csv(index=False)}
-    )
+    # Predictions need to be compressed and then encoded
+    predictions = predicted_dataset.to_csv(index=False)
+    compressed = bz2.compress(predictions.encode())
+    encoded = base64.b64encode(compressed).decode()
+
+    sybl_instance._send_message.assert_called_with({"Predictions": encoded})
 
     assert sybl_instance._state == State.HEARTBEAT
 
