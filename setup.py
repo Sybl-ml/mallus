@@ -1,5 +1,5 @@
 import pathlib
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages  # type: ignore
 
 HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
