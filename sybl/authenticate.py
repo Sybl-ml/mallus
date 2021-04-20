@@ -278,20 +278,19 @@ class Authentication:
         self.stream.send(length + data)
 
 
-def main():
+def main(args):
     """
     The entry point for authentication.
     """
 
-    email: str = input("Enter email: ")
-    password: str = getpass.getpass()
-    name: str = input("Enter name of model: ")
-    print("Authenticating...")
+    if not args.email:
+        email: str = input("Enter email: ")
 
-    verifier = Authentication(email, password, name)
+    password: str = getpass.getpass()
+
+    if not args.model_name:
+        model_name: str = input("Enter name of model: ")
+
+    verifier = Authentication(email, password, model_name)
 
     verifier.verify()
-
-
-if __name__ == "__main__":
-    main()
