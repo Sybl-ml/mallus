@@ -19,7 +19,7 @@ from sybl.authenticate import Authentication, parse_message
 
 @pytest.fixture
 def authentication_instance():
-    instance = Authentication("email", "password", "model_name")
+    instance = Authentication("email", "password", "model_name", address=("ip", 1000))
     instance.access_token = ""
     instance.model_id = 2344423
 

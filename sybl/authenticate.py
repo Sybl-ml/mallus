@@ -26,9 +26,6 @@ from xdg import xdg_data_home
 
 load_dotenv()
 
-DCL_SOCKET: int = 7000
-DCL_IP: str = "127.0.0.1"
-
 
 def sign_challenge(challenge: bytes, private_key: str) -> bytes:
     """
@@ -81,7 +78,13 @@ class Authentication:
     `sybl.json` for them.
     """
 
-    def __init__(self, email: str, password: str, model_name: str):
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        model_name: str,
+        address: Tuple[str, int],
+    ):
         self.email: str = email
         self.password: str = password
         self.model_name: str = model_name
@@ -90,11 +93,13 @@ class Authentication:
         self.model_id: Optional[str] = None
         self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        self.address: Tuple[str, int] = address
+
     def _connect(self):
         """
         Connects to the DCL for communications.
         """
-        self.stream.connect(("127.0.0.1", DCL_SOCKET))
+        self.stream.connect(self.address)
 
     def authenticate_challenge(self, message: Dict[Any, Any]):
         """
@@ -291,6 +296,6 @@ def main(args):
     if not args.model_name:
         model_name: str = input("Enter name of model: ")
 
-    verifier = Authentication(email, password, model_name)
+    verifier = Authentication(email, password, model_name, (args.ip, args.port))
 
     verifier.verify()

@@ -222,7 +222,9 @@ def test_load_access_token(sybl_instance):
 
     with tempfile.TemporaryDirectory() as directory:
         os.environ["XDG_DATA_HOME"] = directory
-        instance = Authentication("model@email", "password", "Test Model")
+        instance = Authentication(
+            "model@email", "password", "Test Model", address=("ip", 1000)
+        )
         instance.access_token = ""
         instance.model_id = "2344423"
         instance.save_access_tokens()
@@ -240,7 +242,9 @@ def test_bad_model_name(sybl_instance):
 
     with tempfile.TemporaryDirectory() as directory:
         os.environ["XDG_DATA_HOME"] = directory
-        instance = Authentication("model@email", "password", "Test Model")
+        instance = Authentication(
+            "model@email", "password", "Test Model", address=("ip", 1000)
+        )
         instance.access_token = ""
         instance.model_id = "2344423"
         instance.save_access_tokens()
