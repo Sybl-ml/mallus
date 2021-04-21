@@ -25,7 +25,10 @@ from dotenv import load_dotenv, find_dotenv
 from xdg import xdg_data_home
 from zenlog import log  # type: ignore
 
-load_dotenv(find_dotenv())
+
+env_path = os.path.join(Path().absolute(), ".env")
+log.debug(f"Loading the `.env` file at: {env_path}")
+load_dotenv(env_path)
 
 
 def sign_challenge(challenge: bytes, private_key: str) -> bytes:
