@@ -288,11 +288,11 @@ def main(args):
     The entry point for authentication.
     """
 
-
-    email: str = if not args.email input("Enter email: ") else args.email
+    email: str = args.email if args.email else input("Enter email: ")
     password: str = getpass.getpass()
-    model_name: str = if not args.model_name input("Enter name of model: ") else args.model_name
-
+    model_name: str = (
+        args.model_name if args.model_name else input("Enter name of model: ")
+    )
 
     verifier = Authentication(email, password, model_name, (args.ip, args.port))
 
