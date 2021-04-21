@@ -21,10 +21,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple, Union
 
 from OpenSSL import crypto  # type: ignore
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from xdg import xdg_data_home
 
-load_dotenv()
+load_dotenv(find_dotenv())
 
 
 def sign_challenge(challenge: bytes, private_key: str) -> bytes:
@@ -288,13 +288,11 @@ def main(args):
     The entry point for authentication.
     """
 
-    if not args.email:
-        email: str = input("Enter email: ")
 
+    email: str = if not args.email input("Enter email: ") else args.email
     password: str = getpass.getpass()
+    model_name: str = if not args.model_name input("Enter name of model: ") else args.model_name
 
-    if not args.model_name:
-        model_name: str = input("Enter name of model: ")
 
     verifier = Authentication(email, password, model_name, (args.ip, args.port))
 
