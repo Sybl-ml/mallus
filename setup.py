@@ -6,7 +6,7 @@ README = (HERE / "README.md").read_text()
 
 setup(
     name="syblmallus",
-    version="0.4.0",
+    version="0.5.0",
     author="SYBL",
     author_email="grahamk206@gmail.com",
     description="Connect to the sybl server",
