@@ -21,9 +21,6 @@ from .job_config import JobConfig
 # This is a bug in Pylint: https://github.com/PyCQA/pylint/issues/3882
 # pylint: disable=unsubscriptable-object
 
-SYBL_IP: str = "127.0.0.1"
-DCL_SOCKET: int = 7000
-
 
 class State(Enum):
     """ State Enum declaring the current message state """
@@ -120,19 +117,33 @@ class Sybl:
     """ Main sybl class for a client to use to process data """
 
     # pylint: disable=too-many-instance-attributes
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        email: Optional[str] = None,
+        model_name: Optional[str] = None,
+        callback: Optional[Callable] = None,
+        job_config: JobConfig = JobConfig(),
+        address: Tuple[str, int] = ("sybl.tech", 7000),
+    ) -> None:
 
-        self.model_name: Optional[str] = None
-        self.email: Optional[str] = None
+        self.email: Optional[str] = email
+        self.model_name: Optional[str] = model_name
 
         self._access_token: Optional[str] = None
         self._model_id: Optional[str] = None
+        if email and model_name:
+            self._access_token, self._model_id = load_access_token(email, model_name)
 
         self._sock: Socket = Socket(socket.AF_INET, socket.SOCK_STREAM)
         self._state: State = State.AUTHENTICATING
+        self._address: Tuple[str, int] = address
 
-        self.callback: Optional[Callable] = None
-        self.config: JobConfig = JobConfig()
+        if callback:
+            self.register_callback(callback)
+        else:
+            self.callback: Optional[Callable] = None
+
+        self.config: JobConfig = job_config
         self.recv_job_config: Optional[Dict] = None
 
         self._message_stack: List[Dict] = []
@@ -179,7 +190,7 @@ class Sybl:
             log.error("Model has not been loaded")
             raise AttributeError("Model access token and ID have not been loaded")
 
-        self._sock.connect((SYBL_IP, DCL_SOCKET))
+        self._sock.connect(self._address)
         log.info("Connected")
 
         if not self._is_authenticated():

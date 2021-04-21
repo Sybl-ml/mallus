@@ -21,13 +21,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple, Union
 
 from OpenSSL import crypto  # type: ignore
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from xdg import xdg_data_home
 
-load_dotenv()
-
-DCL_SOCKET: int = 7000
-DCL_IP: str = "127.0.0.1"
+load_dotenv(find_dotenv())
 
 
 def sign_challenge(challenge: bytes, private_key: str) -> bytes:
@@ -81,7 +78,13 @@ class Authentication:
     `sybl.json` for them.
     """
 
-    def __init__(self, email: str, password: str, model_name: str):
+    def __init__(
+        self,
+        email: str,
+        password: str,
+        model_name: str,
+        address: Tuple[str, int],
+    ):
         self.email: str = email
         self.password: str = password
         self.model_name: str = model_name
@@ -90,11 +93,13 @@ class Authentication:
         self.model_id: Optional[str] = None
         self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        self.address: Tuple[str, int] = address
+
     def _connect(self):
         """
         Connects to the DCL for communications.
         """
-        self.stream.connect(("127.0.0.1", DCL_SOCKET))
+        self.stream.connect(self.address)
 
     def authenticate_challenge(self, message: Dict[Any, Any]):
         """
@@ -278,20 +283,17 @@ class Authentication:
         self.stream.send(length + data)
 
 
-def main():
+def main(args):
     """
     The entry point for authentication.
     """
 
-    email: str = input("Enter email: ")
+    email: str = args.email if args.email else input("Enter email: ")
     password: str = getpass.getpass()
-    name: str = input("Enter name of model: ")
-    print("Authenticating...")
+    model_name: str = (
+        args.model_name if args.model_name else input("Enter name of model: ")
+    )
 
-    verifier = Authentication(email, password, name)
+    verifier = Authentication(email, password, model_name, (args.ip, args.port))
 
     verifier.verify()
-
-
-if __name__ == "__main__":
-    main()
