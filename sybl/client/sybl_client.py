@@ -228,10 +228,7 @@ class Sybl:
         self._send_message(response)
         message = self._read_message()
         try:
-            if message["message"] == "Locked":
-                log.error("Model needs to be unlocked to run")
-                sys.exit(1)
-            elif message["message"] == "Authentication successful":
+            if message["message"] == "Authentication successful":
                 return True
         except KeyError:
             pass
@@ -379,6 +376,14 @@ class Sybl:
             return json.loads(bytes(buf))
 
         message: Dict = json.loads(self._sock.recv(size))
+        # Error handle
+        if "Server" in message.keys():
+            # There has been an error in authentication
+            if "text" in message["Server"].keys():
+                payload: Dict = json.loads(message["Server"]["text"])
+                log.info(payload)
+                code = message["Server"]["code"]
+                self._handle_server_error(code, payload)
         log.info(message)
         return message
 
@@ -390,3 +395,10 @@ class Sybl:
         # print("length: {}".format(length))
 
         self._sock.send(length + encoded)
+
+    def _handle_server_error(self, code: str, payload: Dict):
+        log.error(f"Error Code In Message: {code}")
+
+        if "message" in payload.keys() and payload["message"] == "Locked":
+            log.error("Model needs to be unlocked to run")
+            sys.exit(1)
