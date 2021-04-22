@@ -381,7 +381,6 @@ class Sybl:
             # There has been an error in authentication
             if "text" in message["Server"].keys():
                 payload: Dict = json.loads(message["Server"]["text"])
-                log.info(payload)
                 code = message["Server"]["code"]
                 self._handle_server_error(code, payload)
 
