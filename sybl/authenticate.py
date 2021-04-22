@@ -23,6 +23,7 @@ from typing import Any, Dict, Optional, List, Tuple, Union
 from OpenSSL import crypto  # type: ignore
 from dotenv import load_dotenv, find_dotenv
 from xdg import xdg_data_home
+from zenlog import log  # type: ignore
 
 load_dotenv(find_dotenv())
 
@@ -66,6 +67,8 @@ def parse_message(message: Dict) -> Tuple[str, Any]:
     variant: str = keys[0]
     data: Any = message[variant]
 
+    log.debug(f"Parsed a message with variant={variant} and data={data}")
+
     return (variant, data)
 
 
@@ -85,6 +88,10 @@ class Authentication:
         model_name: str,
         address: Tuple[str, int],
     ):
+        log.debug(
+            f"Initialising a new Authentication with email={email}, model_name={model_name}"
+        )
+
         self.email: str = email
         self.password: str = password
         self.model_name: str = model_name
@@ -100,6 +107,7 @@ class Authentication:
         Connects to the DCL for communications.
         """
         self.stream.connect(self.address)
+        log.info(f"Successfully connected to {self.address}")
 
     def authenticate_challenge(self, message: Dict[Any, Any]):
         """
@@ -115,7 +123,7 @@ class Authentication:
         """
 
         challenge = message["challenge"]
-        print("Authenticating challenge")
+        log.info("Authenticating a challenge from the server")
 
         try:
             private_key = os.environ["PRIVATE_KEY"]
@@ -129,11 +137,9 @@ class Authentication:
                 }
             }
 
-            # print(message)
             self._send_message(message)
-            print("Authenticated")
         except KeyError:
-            print("Private Key not set in environemt variable")
+            log.error("Failed to find the private key in the environment")
 
     def display_access(self, message: Dict):
         """
@@ -151,13 +157,11 @@ class Authentication:
             self.access_token = message["token"]
             self.model_id = message["id"]
 
-            print(
-                "ACCESS TOKEN: {} \n MODEL ID: {}".format(
-                    self.access_token, self.model_id
-                )
-            )
+            log.info("Successfully authenticated with the Sybl system")
+            log.info(f"\tACCESS TOKEN: {self.access_token}")
+            log.info(f"\tMODEL ID: {self.model_id}")
         except KeyError:
-            print("Malformed data")
+            log.error(f"Expected 'token' and 'id' keys but got data={message}")
         finally:
             self.stream.close()
 
@@ -181,12 +185,13 @@ class Authentication:
                 "model_name": self.model_name,
             }
         }
+
         self._send_message(message)
 
         while True:
             # Read some data
             data = self._read_message()
-            print("data: {}".format(data))
+            log.debug(f"Received data={data}")
 
             try:
                 variant, data = parse_message(data)
@@ -198,10 +203,10 @@ class Authentication:
                     self.save_access_tokens()
                     break
                 else:
-                    print("Unknown message Variant")
+                    log.warn(f"Encountered an unexpected message variant={variant}")
 
             except IndexError:
-                print("Message cannot be parsed")
+                log.error(f"Failed to parse a message from data={data}")
 
     def save_access_tokens(self):
         """
@@ -215,26 +220,23 @@ class Authentication:
 
         # Ensure the path exists
         if not Path(directory).is_dir():
-            print(f"Creating the following as it does not exist: {directory}")
+            log.info(f"Creating the following as it does not exist: {directory}")
             Path(directory).mkdir(parents=True)
 
         # Ensure the file itself exists, even if it's empty
         if not Path(path).is_file():
-            print(f"Creating the following file: '{path}'")
+            log.info(f"Creating the following file: '{path}'")
             Path(path).touch()
 
         key_name = f"{self.email}.{self.model_name}"
         new_model = {"model_id": self.model_id, "access_token": self.access_token}
 
         with path.open("r") as sybl_json:
-
             contents = sybl_json.read()
             json_contents = json.loads(contents if contents else "{}")
-
             json_contents[key_name] = new_model
 
         with path.open("w") as sybl_json:
-
             sybl_json.write(json.dumps(json_contents))
 
     def _read_message(self) -> Dict:
@@ -248,9 +250,9 @@ class Authentication:
         """
 
         size_bytes = self.stream.recv(4)
-        # print("size_bytes: {}".format(size_bytes))
-
         size = struct.unpack(">I", size_bytes)[0]
+
+        log.debug(f"Reading a message of size={size} from the stream")
 
         if size > 4096:
             remaining_size = size
@@ -276,8 +278,9 @@ class Authentication:
 
         """
         readable: str = json.dumps(message) if isinstance(message, dict) else message
-        data: bytes = readable.encode("utf-8")
+        log.debug(f"Sending message={readable} to the control layer")
 
+        data: bytes = readable.encode("utf-8")
         length = (len(data)).to_bytes(4, byteorder="big")
 
         self.stream.send(length + data)
