@@ -6,6 +6,7 @@ import struct
 import io
 import base64
 import bz2
+import sys
 
 from enum import Enum, auto
 from socket import socket as Socket
@@ -227,7 +228,10 @@ class Sybl:
         self._send_message(response)
         message = self._read_message()
         try:
-            if message["message"] == "Authentication successful":
+            if message["message"] == "Locked":
+                log.error("Model needs to be unlocked to run")
+                sys.exit(1)
+            elif message["message"] == "Authentication successful":
                 return True
         except KeyError:
             pass
