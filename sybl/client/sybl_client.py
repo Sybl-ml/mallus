@@ -384,6 +384,7 @@ class Sybl:
                 log.info(payload)
                 code = message["Server"]["code"]
                 self._handle_server_error(code, payload)
+
         log.info(message)
         return message
 
@@ -392,13 +393,16 @@ class Sybl:
         encoded = data.encode("utf-8")
 
         length = (len(data)).to_bytes(4, byteorder="big")
-        # print("length: {}".format(length))
 
         self._sock.send(length + encoded)
 
     def _handle_server_error(self, code: str, payload: Dict):
         log.error(f"Error Code In Message: {code}")
 
-        if "message" in payload.keys() and payload["message"] == "Locked":
-            log.error("Model needs to be unlocked to run")
+        if "message" in payload.keys():
+            if payload["message"] == "Locked":
+                log.error("Model needs to be unlocked to run")
+                sys.exit(1)
+        else:
+            log.error("Unspecified error given found in communication, closing")
             sys.exit(1)
