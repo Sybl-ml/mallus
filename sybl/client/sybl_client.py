@@ -378,7 +378,7 @@ class Sybl:
         message: Dict = json.loads(self._sock.recv(size))
         # Error handle
         if "Server" in message.keys():
-            # There has been an error in authentication
+            # There has been an error in communication
             if "text" in message["Server"].keys():
                 payload: Dict = json.loads(message["Server"]["text"])
                 code = message["Server"]["code"]
