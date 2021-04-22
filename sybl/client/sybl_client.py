@@ -6,6 +6,7 @@ import struct
 import io
 import base64
 import bz2
+import sys
 
 from enum import Enum, auto
 from socket import socket as Socket
@@ -375,6 +376,14 @@ class Sybl:
             return json.loads(bytes(buf))
 
         message: Dict = json.loads(self._sock.recv(size))
+        # Error handle
+        if "Server" in message.keys():
+            # There has been an error in communication
+            if "text" in message["Server"].keys():
+                payload: Dict = json.loads(message["Server"]["text"])
+                code = message["Server"]["code"]
+                self._handle_server_error(code, payload)
+
         log.info(message)
         return message
 
@@ -383,6 +392,16 @@ class Sybl:
         encoded = data.encode("utf-8")
 
         length = (len(data)).to_bytes(4, byteorder="big")
-        # print("length: {}".format(length))
 
         self._sock.send(length + encoded)
+
+    def _handle_server_error(self, code: str, payload: Dict):
+        log.error(f"Error Code In Message: {code}")
+
+        if "message" in payload.keys():
+            if payload["message"] == "Locked":
+                log.error("Model needs to be unlocked to run")
+                sys.exit(1)
+        else:
+            log.error("Unspecified error given found in communication, closing")
+            sys.exit(1)
