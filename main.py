@@ -11,10 +11,12 @@ from sybl.client import JobConfig
 
 sybl = Sybl()
 
+
 def ohe(dataset):
     categorical = dataset.select_dtypes("object")
     encoded = pd.get_dummies(categorical[categorical.columns])
     return pd.concat([dataset, encoded], axis=1).drop(categorical, axis=1)
+
 
 def callback(train, predict, job_config):
     """
@@ -48,6 +50,7 @@ def callback(train, predict, job_config):
         return_frame = LinearRegression().fit(X_train, y_train).predict(X_test)
 
     return pd.DataFrame({prediction_col: return_frame})
+
 
 sybl.register_callback(callback)
 sybl.load_model("<email>", "<model_name>")
