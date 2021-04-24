@@ -14,8 +14,10 @@ sybl = Sybl()
 
 def ohe(dataset):
     categorical = dataset.select_dtypes("object")
-    encoded = pd.get_dummies(categorical[categorical.columns])
-    return pd.concat([dataset, encoded], axis=1).drop(categorical, axis=1)
+    if list(categorical.columns) != []:
+        encoded = pd.get_dummies(categorical[categorical.columns])
+        return pd.concat([dataset, encoded], axis=1).drop(categorical, axis=1)
+    return dataset
 
 
 def callback(train, predict, job_config):
