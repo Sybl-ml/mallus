@@ -14,7 +14,7 @@ sybl = Sybl()
 
 def ohe(dataset):
     categorical = dataset.select_dtypes("object")
-    if list(categorical.columns) != []:
+    if not categorical.empty:
         encoded = pd.get_dummies(categorical[categorical.columns])
         return pd.concat([dataset, encoded], axis=1).drop(categorical, axis=1)
     return dataset
