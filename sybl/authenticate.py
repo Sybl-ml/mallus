@@ -16,6 +16,7 @@ import os
 import base64
 import struct
 import getpass
+import sys
 
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple, Union
@@ -75,6 +76,17 @@ def parse_message(message: Dict) -> Tuple[str, Any]:
     return (variant, data)
 
 
+def load_priv_key():
+
+    try:
+        priv_key = os.environ["PRIVATE_KEY"]
+    except KeyError:
+        log.error("PRIVATE_KEY not found in environment. Exiting...")
+        sys.exit(1)
+
+    return priv_key
+
+
 class Authentication:
     """
     Contains methods used for authenticating a client with the DCL.
@@ -103,13 +115,20 @@ class Authentication:
         self.model_id: Optional[str] = None
         self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        self.private_key = load_priv_key()
+
         self.address: Tuple[str, int] = address
 
     def _connect(self):
         """
         Connects to the DCL for communications.
         """
-        self.stream.connect(self.address)
+        try:
+            self.stream.connect(self.address)
+        except ConnectionRefusedError:
+            log.error(f"Could not connect to address: {self.address[0]}")
+            sys.exit(1)
+
         log.info(f"Successfully connected to {self.address}")
 
     def authenticate_challenge(self, message: Dict[Any, Any]):
@@ -129,8 +148,9 @@ class Authentication:
         log.info("Authenticating a challenge from the server")
 
         try:
-            private_key = os.environ["PRIVATE_KEY"]
-            signed_challenge = sign_challenge(base64.b64decode(challenge), private_key)
+            signed_challenge = sign_challenge(
+                base64.b64decode(challenge), self.private_key
+            )
 
             message = {
                 "ChallengeResponse": {
@@ -161,11 +181,14 @@ class Authentication:
             self.model_id = message["id"]
 
             log.info("Successfully authenticated with the Sybl system")
-            log.info(f"\tACCESS TOKEN: {self.access_token}")
-            log.info(f"\tMODEL ID: {self.model_id}")
+            # log.info(f"\tACCESS TOKEN: {self.access_token}")
+            # log.info(f"\tMODEL ID: {self.model_id}")
+
+            log.info("Please go to https://sybl.tech/models to unlock your new model")
         except KeyError:
             log.error(f"Expected 'token' and 'id' keys but got data={message}")
         finally:
+
             self.stream.close()
 
     def verify(self):
@@ -269,7 +292,16 @@ class Authentication:
 
             return json.loads(bytes(buf))
 
-        return json.loads(self.stream.recv(size))
+        message = json.loads(self.stream.recv(size))
+
+        if "Server" in message.keys():
+            # There has been an error in communication
+            if "text" in message["Server"].keys():
+                payload: Dict = json.loads(message["Server"]["text"])
+                code = message["Server"]["code"]
+                self._handle_server_error(code, payload)
+
+        return message
 
     def _send_message(self, message: Union[Dict, str]):
         """
@@ -287,6 +319,19 @@ class Authentication:
         length = (len(data)).to_bytes(4, byteorder="big")
 
         self.stream.send(length + data)
+
+    def _handle_server_error(self, code: str, payload: Dict):
+        log.error(f"Error Code In Message: {code}")
+
+        if "message" in payload.keys():
+            if payload["message"] == "Unauthorized":
+                log.error("Unauthorized\n Check Private Key and try again")
+                self.stream.close()
+                sys.exit(1)
+        else:
+            log.error("Unspecified error given found in communication, closing")
+            self.stream.close()
+            sys.exit(1)
 
 
 def main(args):

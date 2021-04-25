@@ -10,11 +10,12 @@ import json
 import base64
 import tempfile
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pandas as pd  # type: ignore
 import pytest
 from mocket.mocket import mocketize  # type: ignore
+
 
 from sybl.client import Sybl
 from sybl.client.sybl_client import (
@@ -222,9 +223,11 @@ def test_load_access_token(sybl_instance):
 
     with tempfile.TemporaryDirectory() as directory:
         os.environ["XDG_DATA_HOME"] = directory
-        instance = Authentication(
-            "model@email", "password", "Test Model", address=("ip", 1000)
-        )
+
+        with patch("sybl.authenticate.load_priv_key"):
+            instance = Authentication(
+                "model@email", "password", "Test Model", address=("ip", 1000)
+            )
         instance.access_token = ""
         instance.model_id = "2344423"
         instance.save_access_tokens()
@@ -242,9 +245,11 @@ def test_bad_model_name(sybl_instance):
 
     with tempfile.TemporaryDirectory() as directory:
         os.environ["XDG_DATA_HOME"] = directory
-        instance = Authentication(
-            "model@email", "password", "Test Model", address=("ip", 1000)
-        )
+
+        with patch("sybl.authenticate.load_priv_key"):
+            instance = Authentication(
+                "model@email", "password", "Test Model", address=("ip", 1000)
+            )
         instance.access_token = ""
         instance.model_id = "2344423"
         instance.save_access_tokens()
