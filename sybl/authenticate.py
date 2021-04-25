@@ -16,6 +16,7 @@ import os
 import base64
 import struct
 import getpass
+import sys
 
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple, Union
@@ -75,6 +76,17 @@ def parse_message(message: Dict) -> Tuple[str, Any]:
     return (variant, data)
 
 
+def load_priv_key():
+
+    try:
+        priv_key = os.environ["PRIVATE_KEY"]
+    except KeyError:
+        log.error("PRIVATE_KEY not found in environment. Exiting...")
+        sys.exit(1)
+
+    return priv_key
+
+
 class Authentication:
     """
     Contains methods used for authenticating a client with the DCL.
@@ -103,13 +115,20 @@ class Authentication:
         self.model_id: Optional[str] = None
         self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        self.private_key = load_priv_key()
+
         self.address: Tuple[str, int] = address
 
     def _connect(self):
         """
         Connects to the DCL for communications.
         """
-        self.stream.connect(self.address)
+        try:
+            self.stream.connect(self.address)
+        except ConnectionRefusedError:
+            log.error(f"Could not connect to address: {self.address[0]}")
+            sys.exit(1)
+
         log.info(f"Successfully connected to {self.address}")
 
     def authenticate_challenge(self, message: Dict[Any, Any]):
