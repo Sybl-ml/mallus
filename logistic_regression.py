@@ -6,12 +6,14 @@ from sybl.client import Sybl
 
 sybl = Sybl()
 
+
 def ohe(dataset):
     categorical = dataset.select_dtypes("object")
-    if list(categorical.columns) != []:
+    if not categorical.empty:
         encoded = pd.get_dummies(categorical[categorical.columns])
         return pd.concat([dataset, encoded], axis=1).drop(categorical, axis=1)
     return dataset
+
 
 def callback(train, predict, job_config):
     prediction_col = job_config["prediction_column"]
@@ -36,6 +38,7 @@ def callback(train, predict, job_config):
         return_frame = LinearRegression().fit(X_train, y_train).predict(X_test)
 
     return pd.DataFrame({prediction_col: return_frame})
+
 
 sybl.register_callback(callback)
 sybl.load_model("pm@sybl.com", "LogisticRegression")
