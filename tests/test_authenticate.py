@@ -11,15 +11,20 @@ ensuring proper handling of `sybl.json`.
 import os
 import shutil
 import tempfile
+from unittest.mock import patch
 
 import pytest
 
-from sybl.authenticate import Authentication, parse_message
+from sybl.authenticate import Authentication, parse_message, load_priv_key
 
 
 @pytest.fixture
 def authentication_instance():
-    instance = Authentication("email", "password", "model_name", address=("ip", 1000))
+
+    with patch("sybl.authenticate.load_priv_key"):
+        instance = Authentication(
+            "email", "password", "model_name", address=("ip", 1000)
+        )
     instance.access_token = ""
     instance.model_id = 2344423
 
