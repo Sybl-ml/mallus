@@ -1,6 +1,6 @@
-import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.linear_model import LinearRegression
+import pandas as pd  # type: ignore
+from sklearn.linear_model import LogisticRegression  # type: ignore
+from sklearn.linear_model import LinearRegression  # type: ignore
 
 from sybl.client import Sybl
 

@@ -1,6 +1,6 @@
-import pandas as pd
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LinearRegression
+import pandas as pd  # type: ignore
+from sklearn.neighbors import KNeighborsClassifier  # type: ignore
+from sklearn.linear_model import LinearRegression  # type: ignore
 
 from sybl.client import Sybl
 
