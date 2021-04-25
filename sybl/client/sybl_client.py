@@ -168,6 +168,18 @@ class Sybl:
 
         self.callback = callback
 
+    def _connect_to_sock(self):
+        """
+        Connects to the DCL for communications.
+        """
+        try:
+            self._sock.connect(self._address)
+        except ConnectionRefusedError:
+            log.error(f"Could not connect to address: {self._address[0]}")
+            sys.exit(1)
+
+        log.info(f"Successfully connected to {self._address}")
+
     def connect(self):
         """
         Connects to the Sybl service
@@ -191,7 +203,7 @@ class Sybl:
             log.error("Model has not been loaded")
             raise AttributeError("Model access token and ID have not been loaded")
 
-        self._sock.connect(self._address)
+        self._connect_to_sock()
         log.info("Connected")
 
         if not self._is_authenticated():
@@ -314,7 +326,6 @@ class Sybl:
     def _message_control(self) -> None:
 
         response: Dict = self._read_message()
-
         log.debug("HEARTBEAT")
 
         if "Alive" in response.keys():
@@ -358,7 +369,11 @@ class Sybl:
 
     def _read_message(self) -> Dict:
         size_bytes = self._sock.recv(4)
-        # print("size_bytes: {}".format(size_bytes))
+
+        if size_bytes == b"":
+            log.error("Empty Message: Closing")
+            self._sock.close()
+            sys.exit(1)
 
         size = struct.unpack(">I", size_bytes)[0]
         log.debug("Message size: %d", size)

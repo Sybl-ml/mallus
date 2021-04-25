@@ -148,8 +148,9 @@ class Authentication:
         log.info("Authenticating a challenge from the server")
 
         try:
-            private_key = os.environ["PRIVATE_KEY"]
-            signed_challenge = sign_challenge(base64.b64decode(challenge), private_key)
+            signed_challenge = sign_challenge(
+                base64.b64decode(challenge), self.private_key
+            )
 
             message = {
                 "ChallengeResponse": {
@@ -180,11 +181,14 @@ class Authentication:
             self.model_id = message["id"]
 
             log.info("Successfully authenticated with the Sybl system")
-            log.info(f"\tACCESS TOKEN: {self.access_token}")
-            log.info(f"\tMODEL ID: {self.model_id}")
+            # log.info(f"\tACCESS TOKEN: {self.access_token}")
+            # log.info(f"\tMODEL ID: {self.model_id}")
+
+            log.info("Please go to https://sybl.tech/models to unlock your new model")
         except KeyError:
             log.error(f"Expected 'token' and 'id' keys but got data={message}")
         finally:
+
             self.stream.close()
 
     def verify(self):
@@ -288,7 +292,16 @@ class Authentication:
 
             return json.loads(bytes(buf))
 
-        return json.loads(self.stream.recv(size))
+        message = json.loads(self.stream.recv(size))
+
+        if "Server" in message.keys():
+            # There has been an error in communication
+            if "text" in message["Server"].keys():
+                payload: Dict = json.loads(message["Server"]["text"])
+                code = message["Server"]["code"]
+                self._handle_server_error(code, payload)
+
+        return message
 
     def _send_message(self, message: Union[Dict, str]):
         """
@@ -306,6 +319,19 @@ class Authentication:
         length = (len(data)).to_bytes(4, byteorder="big")
 
         self.stream.send(length + data)
+
+    def _handle_server_error(self, code: str, payload: Dict):
+        log.error(f"Error Code In Message: {code}")
+
+        if "message" in payload.keys():
+            if payload["message"] == "Unauthorized":
+                log.error("Unauthorized\n Check Private Key and try again")
+                self.stream.close()
+                sys.exit(1)
+        else:
+            log.error("Unspecified error given found in communication, closing")
+            self.stream.close()
+            sys.exit(1)
 
 
 def main(args):
