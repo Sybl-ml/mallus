@@ -180,6 +180,35 @@ class Sybl:
 
         log.info(f"Successfully connected to {self._address}")
 
+        # Send a message requesting a port
+        self._send_message('"PortRequest"')
+
+        # Expect one back giving a port
+        port_response = self._read_message()
+
+        # Check we got what we expected ({"PortResponse": { "port": Optional[int] }})
+        if "PortResponse" not in port_response:
+            log.error(f"Expected a 'PortResponse', got: {port_response}")
+            sys.exit(1)
+
+        # Check we have a port
+        port = port_response["PortResponse"]["port"]
+
+        if port is None:
+            log.error(f"No DCL edge nodes are available, got port={port}")
+            sys.exit(1)
+
+        log.info(f"Control node responded with port={port}")
+
+        # Close the connection and open to the new port
+        self._sock.close()
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Connect to the port itself
+        host = self._address[0]
+        log.debug(f"Connecting to {host}:{port}")
+        self._sock.connect((host, port))
+
     def connect(self):
         """
         Connects to the Sybl service

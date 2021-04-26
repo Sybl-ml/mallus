@@ -131,6 +131,33 @@ class Authentication:
 
         log.info(f"Successfully connected to {self.address}")
 
+        # Send a message requesting a port
+        self._send_message('"PortRequest"')
+
+        # Expect one back giving a port
+        port_response = self._read_message()
+
+        # Check we got what we expected ({"PortResponse": { "port": Optional[int] }})
+        if "PortResponse" not in port_response:
+            log.error(f"Expected a 'PortResponse', got: {port_response}")
+            sys.exit(1)
+
+        # Check we have a port
+        port = port_response["PortResponse"]["port"]
+
+        if port is None:
+            log.error(f"No DCL edge nodes are available, got port={port}")
+            sys.exit(1)
+
+        # Close the connection and open to the new port
+        self.stream.close()
+        self.stream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Connect to the port itself
+        address = (self.address[0], port)
+        log.debug(f"Connecting to {address}")
+        self.stream.connect(address)
+
     def authenticate_challenge(self, message: Dict[Any, Any]):
         """
         Authenticates a challenge message and responds to the requestor.
