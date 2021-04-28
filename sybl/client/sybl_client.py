@@ -379,14 +379,11 @@ class Sybl:
         log.debug("Message size: %d", size)
 
         if size > 4096:
-            remaining_size = size
             buf: List[int] = []
 
-            while remaining_size > 0:
+            while len(buf) < size:
                 chunk = self._sock.recv(4096)
                 buf.extend(chunk)
-
-                remaining_size -= 4096
 
             return json.loads(bytes(buf))
 
